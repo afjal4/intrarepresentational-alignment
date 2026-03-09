@@ -14,16 +14,16 @@ class MetaphorEntry:
     # Alternative name string
     alias: str | None = None
 
-    # The source conceptual domain (concrete / physical / experiential)
+    # The source conceptual domain (KNOWLEDGE in KNOWING IS SEEING)
     source_frame: str | None = None
 
-    # The target conceptual domain (abstract / target of understanding)
+    # The target conceptual domain (SEER in KNOWING IS SEEING)
     target_frame: str | None = None
 
-    # Explicit role-level correspondences between source and target frame participants
+    # Mappings between source and target frame participants (KNOWER <-> SEER)
     mappings: list[str] = field(default_factory=list)
 
-    # Logical consequences of the mapping - inferences that follow from applying it
+    # 'Second-order' inferences that logically follow from the mappings
     entailments: list[str] = field(default_factory=list)
 
     # Attested corpus sentences that instantiate this metaphor
@@ -79,7 +79,7 @@ class Frame:
     # Semantic roles (participants / props) defined within this frame
     roles: list[str] = field(default_factory=list)
 
-    # Words and phrases (lemmas + POS) that linguistically evoke this frame
+    # Pairing of a lemma with a Part-Of-Speech (POS) tag
     lexical_units: list[str] = field(default_factory=list)
 
     # Statements about what is implied within this frame's scenario
@@ -138,8 +138,11 @@ class Example:
 
     # Full sentence that instantiates the metaphor
     sentence: str | None = None
+
     # Language of the example sentence
     language: str | None = None
+    # Regional or social dialect of the example (e.g. "American English")
+    dialect: str | None = None
 
     # The specific phrase within the sentence that was annotated as metaphorical
     annotation: str | None = None
@@ -147,10 +150,7 @@ class Example:
     # Syntactic construction pattern used (e.g. "Noun(S) preposition Noun(T)")
     construction: str | None = None
 
-    # Regional or social dialect of the example (e.g. "American English")
-    dialect: str | None = None
-
-    # URL or bibliographic reference identifying the source of the sentence
+    # URL or bibliographic reference
     provenance: str | None = None
 
 
