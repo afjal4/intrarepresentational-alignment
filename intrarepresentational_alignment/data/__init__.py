@@ -1,5 +1,5 @@
+from .extractors import load_metanet
 from .metanet import (
-    load_metanet,
     MetaNetRepository,
     MetaphorEntry,
     Frame,
