@@ -14,5 +14,5 @@ class Embedder:
         self.sentenceTransformer = _load_model(model_id)
 
     def embed(self, text: str | list[str]) -> np.ndarray:
-        """Return L2-normalised embedding(s) for text."""
+        """Return normalised embedding(s) for text."""
         return self.sentenceTransformer.encode(text, normalize_embeddings=True)
