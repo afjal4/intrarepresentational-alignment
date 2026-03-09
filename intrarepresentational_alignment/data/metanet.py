@@ -3,73 +3,24 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from rdflib import Graph, URIRef, Literal
-from rdflib.namespace import RDF, RDFS
+from rdflib import Graph, Literal, URIRef
 
-# ---------------------------------------------------------------------------
-# Namespace URIs
-# ---------------------------------------------------------------------------
-
-_MN = "http://metanet.english.ubc.ca/metaphor/MetaphorOntology.owl#"
-_MR = "https://metaphor.icsi.berkeley.edu/en/MetaphorRepository.owl#"
-
-# rdflib URIRef shorthands for every property we read
-_type              = RDF.type
-_label             = RDFS.label
-
-_Metaphor          = URIRef(_MN + "Metaphor")
-_Frame             = URIRef(_MN + "Frame")
-_Mapping           = URIRef(_MN + "Mapping")
-_Binding           = URIRef(_MN + "Binding")
-_Example           = URIRef(_MN + "Example")
-_LexicalUnit       = URIRef(_MN + "LexicalUnit")
-
-_hasName           = URIRef(_MN + "hasName")
-_hasDescription    = URIRef(_MN + "hasDescription")
-_hasStatus         = URIRef(_MN + "hasStatus")
-_hasCulturalScope  = URIRef(_MN + "hasCulturalScope")
-_wasInvestigatedFor= URIRef(_MN + "wasInvestigatedFor")
-
-_hasSourceFrame    = URIRef(_MN + "hasSourceFrame")
-_hasTargetFrame    = URIRef(_MN + "hasTargetFrame")
-_hasMappings       = URIRef(_MN + "hasMappings")
-_hasEntailment     = URIRef(_MN + "hasEntailment")
-_hasExample        = URIRef(_MN + "hasExample")
-_isEntailedByMetaphor       = URIRef(_MN + "isEntailedByMetaphor")
-_isTargetSubcaseOfMetaphor  = URIRef(_MN + "isTargetSubcaseOfMetaphor")
-_isSourceSubcaseOfMetaphor  = URIRef(_MN + "isSourceSubcaseOfMetaphor")
-_isInMetaphorFamily         = URIRef(_MN + "isInMetaphorFamily")
-_hasAlias          = URIRef(_MN + "hasAlias")
-_hasMetaphorType   = URIRef(_MN + "hasMetaphorType")
-_hasMetaphorLevel  = URIRef(_MN + "hasMetaphorLevel")
-_hasFrenchCorrespondent  = URIRef(_MN + "hasFrenchCorrespondent")
-_hasSpanishCorrespondent = URIRef(_MN + "hasSpanishCorrespondent")
-
-_hasFrameType          = URIRef(_MN + "hasFrameType")
-_hasRoles              = URIRef(_MN + "hasRoles")
-_hasLexicalUnit        = URIRef(_MN + "hasLexicalUnit")
-_hasInference          = URIRef(_MN + "hasInference")
-_hasBindings           = URIRef(_MN + "hasBindings")
-_isInFrameFamily       = URIRef(_MN + "isInFrameFamily")
-_correspondsToFrameNet = URIRef(_MN + "correspondsToFrameNet")
-_makesUseOfFrame       = URIRef(_MN + "makesUseOfFrame")
-
-_hasSourceRole = URIRef(_MN + "hasSourceRole")
-_hasTargetRole = URIRef(_MN + "hasTargetRole")
-
-_hasBoundRole1 = URIRef(_MN + "hasBoundRole1")
-_hasBoundRole2 = URIRef(_MN + "hasBoundRole2")
-
-_hasSentence       = URIRef(_MN + "hasSentence")
-_hasAnnotation     = URIRef(_MN + "hasAnnotation")
-_exampleConstruct  = URIRef(_MN + "Example.Construction")
-_exampleDialect    = URIRef(_MN + "Example.Dialect")
-_isFromLanguage    = URIRef(_MN + "isFromLanguage")
-_hasProvenance     = URIRef(_MN + "hasProvenance")
-
-_hasLemma    = URIRef(_MN + "hasLemma")
-_LUs_Lemmas  = URIRef(_MN + "LUs_Lemmas")
-_LUs_Language= URIRef(_MN + "LUs_Language")
+from .namespaces import (
+    _type, _label,
+    _Metaphor, _Frame, _Mapping, _Binding, _Example, _LexicalUnit,
+    _hasName, _hasDescription, _hasStatus, _hasCulturalScope, _wasInvestigatedFor,
+    _hasSourceFrame, _hasTargetFrame, _hasMappings, _hasEntailment, _hasExample,
+    _isEntailedByMetaphor, _isTargetSubcaseOfMetaphor, _isSourceSubcaseOfMetaphor,
+    _isInMetaphorFamily, _hasAlias, _hasMetaphorType, _hasMetaphorLevel,
+    _hasFrenchCorrespondent, _hasSpanishCorrespondent,
+    _hasFrameType, _hasRoles, _hasLexicalUnit, _hasInference, _hasBindings,
+    _isInFrameFamily, _correspondsToFrameNet, _makesUseOfFrame,
+    _hasSourceRole, _hasTargetRole,
+    _hasBoundRole1, _hasBoundRole2,
+    _hasSentence, _hasAnnotation, _exampleConstruct, _exampleDialect,
+    _isFromLanguage, _hasProvenance,
+    _hasLemma, _LUs_Lemmas, _LUs_Language,
+)
 
 
 # ---------------------------------------------------------------------------
