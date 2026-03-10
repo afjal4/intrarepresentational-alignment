@@ -26,7 +26,7 @@ class KNN(SparsificationStrategy):
     Mutual k-nearest-neighbour sparsification.
 
     An edge (i, j) is retained only when j is among the top-k neighbours
-    of i *and* i is among the top-k neighbours of j (mutual requirement).
+    of i, and i is among the top-k neighbours of j (mutual requirement).
     This guarantees a symmetric adjacency matrix and reflects the intuition
     that semantic relationships should be bidirectional.
     """
