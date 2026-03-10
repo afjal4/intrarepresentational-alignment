@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from abc import ABC, abstractmethod
 from functools import lru_cache
 from pathlib import Path
@@ -259,12 +260,28 @@ class MetaNetRepository:
 # Public API
 # ---------------------------------------------------------------------------
 
+def _sanitize_rdf_xml(content: str) -> str:
+    """URL-encode spaces inside xmlns namespace URI declarations.
+
+    Some MetaNet RDF exports embed raw spaces in namespace URIs (e.g.
+    ``xmlns:French="...#Closest French "``), which is invalid XML.
+    This replaces spaces within those URI strings with ``%20`` so the
+    expat parser can accept the document.
+    """
+    return re.sub(
+        r'(xmlns:\w+=")([^"]*)"',
+        lambda m: m.group(1) + m.group(2).replace(" ", "%20") + '"',
+        content,
+    )
+
+
 @lru_cache(maxsize=None)
 def _load_metanet_cached(path_str: str) -> MetaNetRepository:
     """Parse an RDF file and return a cached MetaNetRepository."""
     g = Graph()
     try:
-        g.parse(path_str)
+        raw = Path(path_str).read_text(encoding="utf-8")
+        g.parse(data=_sanitize_rdf_xml(raw), format="xml")
     except FileNotFoundError:
         raise FileNotFoundError(f"MetaNet RDF file not found: '{path_str}'")
     except Exception as e:
