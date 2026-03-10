@@ -11,7 +11,7 @@ class SimilarityMetric(ABC):
     Abstract base for pairwise similarity functions over embedding vectors.
 
     Subclasses must implement `__call__` for a single pair. The default
-    `matrix` implementation calls `__call__` in an O(N²) loop; subclasses
+    `matrix` implementation calls `__call__` in an O(N^2) loop; subclasses
     should override it with a vectorised version where possible.
     """
 
@@ -34,7 +34,7 @@ class SimilarityMetric(ABC):
 
 
 class CosineSimilarity(SimilarityMetric):
-    """Cosine similarity: dot(a, b) / (|a|||b|). Range: [-1, 1]."""
+    """Cosine similarity: a.b / (|a|||b|). Range: [-1, 1]."""
 
     def __call__(self, a: np.ndarray, b: np.ndarray) -> float:
         return float(np.dot(a, b) / (np.linalg.norm(a) * np.linalg.norm(b)))
@@ -55,7 +55,7 @@ class RBFKernel(SimilarityMetric):
         return float(np.exp(-self.gamma * np.sum((a - b) ** 2)))
 
     def matrix(self, embeddings: np.ndarray) -> np.ndarray:
-        # |a − b|^2 = |a|^2 + |b|^2 − 2 a^Tb
+        # |a-b|^2 = |a|^2 + |b|^2 - 2 a^Tb
         sq_norms = np.sum(embeddings ** 2, axis=1)
         sq_dists = sq_norms[:, None] + sq_norms[None, :] - 2.0 * (embeddings @ embeddings.T)
         return np.exp(-self.gamma * sq_dists)
