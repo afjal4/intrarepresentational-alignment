@@ -6,27 +6,61 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Generic, TypeVar
 
-from rdflib import Graph, Literal, URIRef
+try:
+    from rdflib import Graph, Literal, URIRef
+    from .namespaces import (
+        _type, _label,
+        _Metaphor, _Frame, _Mapping, _Binding, _Example, _LexicalUnit,
+        _hasName, _hasDescription, _hasStatus,
+        _hasCulturalScope, _wasInvestigatedFor,
+        _hasSourceFrame, _hasTargetFrame, _hasMappings,
+        _hasEntailment, _hasExample,
+        _isEntailedByMetaphor, _isTargetSubcaseOfMetaphor,
+        _isSourceSubcaseOfMetaphor,
+        _isInMetaphorFamily, _hasAlias, _hasMetaphorType, _hasMetaphorLevel,
+        _hasFrenchCorrespondent, _hasSpanishCorrespondent,
+        _hasFrameType, _hasRoles, _hasLexicalUnit,
+        _hasInference, _hasBindings,
+        _isInFrameFamily, _correspondsToFrameNet, _makesUseOfFrame,
+        _hasSourceRole, _hasTargetRole,
+        _hasBoundRole1, _hasBoundRole2,
+        _hasSentence, _hasAnnotation, _exampleConstruct, _exampleDialect,
+        _isFromLanguage, _hasProvenance,
+        _hasLemma, _LUs_Lemmas, _LUs_Language,
+    )
+    _RDFLIB_AVAILABLE = True
+    _rdflib_import_error = None
+except ImportError as _e:
+    # 'as' target is deleted on except-block exit; save it explicitly.
+    _rdflib_import_error = _e
+    _RDFLIB_AVAILABLE = False
+    Graph = Literal = URIRef = None
+    # Stub every namespace name so class bodies below don't raise NameError.
+    # These classes are unreachable: load_metanet() raises ImportError first.
+    globals().update(dict.fromkeys(
+        (
+            '_type _label _Metaphor _Frame _Mapping _Binding '
+            '_Example _LexicalUnit _hasName _hasDescription '
+            '_hasStatus _hasCulturalScope _wasInvestigatedFor '
+            '_hasSourceFrame _hasTargetFrame _hasMappings '
+            '_hasEntailment _hasExample _isEntailedByMetaphor '
+            '_isTargetSubcaseOfMetaphor _isSourceSubcaseOfMetaphor '
+            '_isInMetaphorFamily _hasAlias _hasMetaphorType '
+            '_hasMetaphorLevel _hasFrenchCorrespondent '
+            '_hasSpanishCorrespondent _hasFrameType _hasRoles '
+            '_hasLexicalUnit _hasInference _hasBindings '
+            '_isInFrameFamily _correspondsToFrameNet _makesUseOfFrame '
+            '_hasSourceRole _hasTargetRole _hasBoundRole1 _hasBoundRole2 '
+            '_hasSentence _hasAnnotation _exampleConstruct '
+            '_exampleDialect _isFromLanguage _hasProvenance '
+            '_hasLemma _LUs_Lemmas _LUs_Language'
+        ).split(),
+        None,
+    ))
 
 from .metanet import (
     LocalID,
     MetaphorEntry, Frame, Mapping, Binding, Example, LexicalUnit,
-)
-from .namespaces import (
-    _type, _label,
-    _Metaphor, _Frame, _Mapping, _Binding, _Example, _LexicalUnit,
-    _hasName, _hasDescription, _hasStatus, _hasCulturalScope, _wasInvestigatedFor,
-    _hasSourceFrame, _hasTargetFrame, _hasMappings, _hasEntailment, _hasExample,
-    _isEntailedByMetaphor, _isTargetSubcaseOfMetaphor, _isSourceSubcaseOfMetaphor,
-    _isInMetaphorFamily, _hasAlias, _hasMetaphorType, _hasMetaphorLevel,
-    _hasFrenchCorrespondent, _hasSpanishCorrespondent,
-    _hasFrameType, _hasRoles, _hasLexicalUnit, _hasInference, _hasBindings,
-    _isInFrameFamily, _correspondsToFrameNet, _makesUseOfFrame,
-    _hasSourceRole, _hasTargetRole,
-    _hasBoundRole1, _hasBoundRole2,
-    _hasSentence, _hasAnnotation, _exampleConstruct, _exampleDialect,
-    _isFromLanguage, _hasProvenance,
-    _hasLemma, _LUs_Lemmas, _LUs_Language,
 )
 
 T = TypeVar("T")
@@ -285,7 +319,9 @@ def _load_metanet_cached(path_str: str) -> MetaNetRepository:
     except FileNotFoundError:
         raise FileNotFoundError(f"MetaNet RDF file not found: '{path_str}'")
     except Exception as e:
-        raise ValueError(f"Could not parse MetaNet RDF at '{path_str}': {e}") from e
+        raise ValueError(
+            f"Could not parse MetaNet RDF at '{path_str}': {e}"
+        ) from e
     return MetaNetRepository(g)
 
 
@@ -294,4 +330,8 @@ def load_metanet(path: str | Path) -> MetaNetRepository:
     Load a MetaNet RDF file and return a MetaNetRepository.
     Results are cached by resolved path.
     """
+    if not _RDFLIB_AVAILABLE:
+        raise ImportError(
+            "load_metanet requires rdflib: pip install rdflib"
+        ) from _rdflib_import_error
     return _load_metanet_cached(str(Path(path).resolve()))

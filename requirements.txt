@@ -1,3 +1,5 @@
 numpy
 sentence-transformers
 rdflib
+ipykernel
+matplotlib

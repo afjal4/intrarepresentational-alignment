@@ -170,3 +170,41 @@ class LexicalUnit:
 
     # Language of the lexical unit
     language: str | None = None
+
+
+@dataclass
+class LccInstance:
+    # Unique instance ID from the corpus
+    id: str
+
+    # Document ID
+    doc_id: str
+
+    # Abstract target concept category (e.g. "POVERTY", "TAXATION")
+    target_concept: str
+
+    # Corpus validation type ("RECALL_VALIDATIONS" or "SYSTEM_VALIDATIONS")
+    instance_type: str
+
+    # Syntactic dependency chain pattern (e.g. "*:prep_on")
+    chain: str
+
+    # Surrounding sentence context
+    prev_sentence: str | None = None
+    current_sentence: str | None = None
+    next_sentence: str | None = None
+
+    # Source domain expressions: the concrete/vehicle phrases from <LmSource> tags
+    source_expressions: list[str] = field(default_factory=list)
+
+    # Target domain expressions: the abstract/topic phrases from <LmTarget> tags
+    target_expressions: list[str] = field(default_factory=list)
+
+    # Metaphoricity scores (1.0 = literal, 3.0 = highly metaphorical)
+    metaphoricity_scores: list[float] = field(default_factory=list)
+
+    # Polarity labels per annotator ("POSITIVE", "NEGATIVE", "NEUTRAL")
+    polarity_labels: list[str] = field(default_factory=list)
+
+    # Intensity scores per annotator (0.0–3.0)
+    intensity_scores: list[float] = field(default_factory=list)
