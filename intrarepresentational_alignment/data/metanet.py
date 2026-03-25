@@ -200,6 +200,10 @@ class LccInstance:
     # Target domain expressions: the abstract/topic phrases from <LmTarget> tags
     target_expressions: list[str] = field(default_factory=list)
 
+    # Conceptual source domain label from <CMSourceAnnotation> (e.g. "DISEASE",
+    # "STRUGGLE").  Only present on a subset of instances; None if unannotated.
+    source_concept: str | None = None
+
     # Metaphoricity scores (1.0 = literal, 3.0 = highly metaphorical)
     metaphoricity_scores: list[float] = field(default_factory=list)
 

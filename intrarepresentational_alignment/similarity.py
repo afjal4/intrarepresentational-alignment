@@ -5,6 +5,8 @@ from itertools import combinations_with_replacement
 
 import numpy as np
 
+from .graph import SparsificationStrategy
+
 
 class SimilarityMetric(ABC):
     """
@@ -57,5 +59,32 @@ class RBFKernel(SimilarityMetric):
     def matrix(self, embeddings: np.ndarray) -> np.ndarray:
         # |a-b|^2 = |a|^2 + |b|^2 - 2 a^Tb
         sq_norms = np.sum(embeddings ** 2, axis=1)
-        sq_dists = sq_norms[:, None] + sq_norms[None, :] - 2.0 * (embeddings @ embeddings.T)
+        sq_dists = (sq_norms[:, None] + sq_norms[None, :]
+                    - 2.0 * (embeddings @ embeddings.T))
         return np.exp(-self.gamma * sq_dists)
+
+
+class SparseKernel(SimilarityMetric):
+    """Sparsified kernel: dense metric followed by a sparsification strategy.
+
+    Computes the full pairwise kernel with `base`, then zeros out edges that
+    the `strategy` discards.  The resulting matrix retains only the retained
+    entries (mutual-KNN neighbours, or values above an epsilon threshold).
+
+    Pair-wise `__call__` falls through to the base metric unchanged.
+    """
+
+    def __init__(
+        self,
+        base: SimilarityMetric,
+        strategy: SparsificationStrategy,
+    ) -> None:
+        self._base = base
+        self._strategy = strategy
+
+    def __call__(self, a: np.ndarray, b: np.ndarray) -> float:
+        return self._base(a, b)
+
+    def matrix(self, embeddings: np.ndarray) -> np.ndarray:
+        dense = self._base.matrix(embeddings)
+        return self._strategy(dense)

@@ -83,10 +83,21 @@ def _build_instance(elem: ET.Element) -> LccInstance:
     metaphoricity: list[float] = []
     polarity: list[str] = []
     intensity: list[float] = []
+    source_concept: str | None = None
     if annotations is not None:
         metaphoricity = _float_attrs(annotations, "MetaphoricityAnnotation", "score")
         polarity = _str_attrs(annotations, "PolarityAnnotation", "polarity")
         intensity = _float_attrs(annotations, "IntensityAnnotation", "intensity")
+        # Pick the highest-scored CMSourceAnnotation (score > 0) as the
+        # conceptual source domain label (e.g. "DISEASE", "STRUGGLE").
+        best = max(
+            (a for a in annotations.iter("CMSourceAnnotation")
+             if float(a.get("score", 0)) > 0),
+            key=lambda a: float(a.get("score", 0)),
+            default=None,
+        )
+        if best is not None:
+            source_concept = best.get("sourceConcept")
 
     return LccInstance(
         id                   = elem.get("id", ""),
@@ -99,6 +110,7 @@ def _build_instance(elem: ET.Element) -> LccInstance:
         next_sentence        = nxt,
         source_expressions   = source_exprs,
         target_expressions   = target_exprs,
+        source_concept       = source_concept,
         metaphoricity_scores = metaphoricity,
         polarity_labels      = polarity,
         intensity_scores     = intensity,

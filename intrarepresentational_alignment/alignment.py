@@ -58,3 +58,60 @@ def cka_permutation_test(
 
     p_value = float((null >= observed).mean())
     return PermutationTestResult(observed=observed, null=null, p_value=p_value)
+
+
+def ged(K: np.ndarray, L: np.ndarray, threshold: float = 0.0) -> float:
+    """Graph Edit Distance between two weighted kernel matrices.
+
+    Node correspondences are assumed fixed: both matrices are over the same
+    N items in the same order (the paired S→T expressions), so GED reduces
+    to a sum of per-edge edit costs over the upper triangle:
+
+      - Deletion  (edge in K, absent in L):  cost = K[i,j]
+      - Insertion (edge in L, absent in K):  cost = L[i,j]
+      - Substitution (edge in both):         cost = |K[i,j] - L[i,j]|
+      - Absent in both:                      cost = 0
+
+    Entries at or below `threshold` are treated as absent edges.
+    The result is normalised by the total edge weight of both graphs so
+    it lies in [0, 1] regardless of matrix size or density.
+    """
+    idx = np.triu_indices(K.shape[0], k=1)
+    k, l = K[idx], L[idx]
+
+    k_present = k > threshold
+    l_present = l > threshold
+
+    cost  = np.sum(np.abs(k[k_present & l_present] - l[k_present & l_present]))
+    cost += np.sum(k[k_present & ~l_present])
+    cost += np.sum(l[~k_present & l_present])
+
+    total = np.sum(k[k_present]) + np.sum(l[l_present])
+    return float(cost / total) if total > 0 else 0.0
+
+
+def ged_permutation_test(
+    K: np.ndarray,
+    L: np.ndarray,
+    threshold: float = 0.0,
+    n_permutations: int = 1000,
+    rng: np.random.Generator | None = None,
+) -> PermutationTestResult:
+    """Test whether GED(K, L) is significantly below chance (lower = more similar).
+
+    Each permutation shuffles the row/column order of L, breaking the S→T
+    correspondence.  The p-value is the fraction of null GEDs <= observed GED.
+    """
+    if rng is None:
+        rng = np.random.default_rng()
+
+    observed = ged(K, L, threshold)
+    null = np.empty(n_permutations)
+    n = K.shape[0]
+
+    for i in range(n_permutations):
+        pi = rng.permutation(n)
+        null[i] = ged(K, L[np.ix_(pi, pi)], threshold)
+
+    p_value = float((null <= observed).mean())
+    return PermutationTestResult(observed=observed, null=null, p_value=p_value)

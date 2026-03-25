@@ -62,6 +62,37 @@ class EpsilonThreshold(SparsificationStrategy):
         return adjacency
 
 
+class TopFraction(SparsificationStrategy):
+    """
+    Top-fraction sparsification.
+
+    Keeps exactly ``ceil(fraction * n*(n-1)/2)`` edges — the strongest ones
+    by weight — so every matrix of the same size yields the same edge count.
+    This makes graphs directly comparable regardless of their weight scale.
+
+    Example: ``TopFraction(0.20)`` keeps the top 20 % of possible edges.
+    """
+
+    def __init__(self, fraction: float) -> None:
+        if not 0 < fraction <= 1:
+            raise ValueError("fraction must be in (0, 1]")
+        self.fraction = fraction
+
+    def __call__(self, kernel: np.ndarray) -> np.ndarray:
+        n = kernel.shape[0]
+        rows, cols = np.triu_indices(n, k=1)
+        upper = kernel[rows, cols]
+        k = max(1, int(np.ceil(self.fraction * len(upper))))
+        # select exactly k edges by rank to avoid tie ambiguity
+        top_k_idx = np.argpartition(upper, -k)[-k:]
+        mask = np.zeros((n, n), dtype=bool)
+        mask[rows[top_k_idx], cols[top_k_idx]] = True
+        mask = mask | mask.T          # symmetrise
+        adjacency = np.where(mask, kernel, 0.0)
+        np.fill_diagonal(adjacency, 0.0)
+        return adjacency
+
+
 class SparseGraph:
     """A sparse weighted graph derived from a dense kernel matrix."""
 
