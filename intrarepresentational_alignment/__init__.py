@@ -1,22 +1,30 @@
 from __future__ import annotations
 
+from .embedding import Embedder
+from .graph import EpsilonThreshold, KNN, SparsificationStrategy, TopFraction
+from .models import EmbeddingModel
+from .similarity import (
+    ChunkedComputationStrategy,
+    CosineSimilarity,
+    DenseComputationStrategy,
+    MatrixComputationStrategy,
+    RBFKernel,
+    SimilarityMetric,
+    SparseKernel,
+)
 
-def __getattr__(name: str):
-    if name in ("EmbeddingModel",):
-        from .models import EmbeddingModel
-        globals()["EmbeddingModel"] = EmbeddingModel
-        return globals()[name]
-    if name in ("Embedder",):
-        from .embedding import Embedder
-        globals()["Embedder"] = Embedder
-        return globals()[name]
-    if name in ("SparsificationStrategy", "KNN", "EpsilonThreshold", "SparseGraph"):
-        from .graph import SparsificationStrategy, KNN, EpsilonThreshold, SparseGraph
-        globals().update(dict(
-            SparsificationStrategy=SparsificationStrategy,
-            KNN=KNN,
-            EpsilonThreshold=EpsilonThreshold,
-            SparseGraph=SparseGraph,
-        ))
-        return globals()[name]
-    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+__all__ = [
+    "ChunkedComputationStrategy",
+    "CosineSimilarity",
+    "DenseComputationStrategy",
+    "EmbeddingModel",
+    "Embedder",
+    "EpsilonThreshold",
+    "KNN",
+    "MatrixComputationStrategy",
+    "RBFKernel",
+    "SimilarityMetric",
+    "SparseKernel",
+    "SparsificationStrategy",
+    "TopFraction",
+]

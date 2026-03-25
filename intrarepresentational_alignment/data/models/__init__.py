@@ -1,16 +1,13 @@
-from .lcc import load_lcc
-from .models import (
+from .lcc_models import LccInstance
+from .metanet_models import (
     Binding,
     Example,
     Frame,
-    LccInstance,
     LexicalUnit,
     LocalID,
     Mapping,
     MetaphorEntry,
 )
-from .parsers.metanet_loader import load_metanet
-from .repositories.metanet_repository import MetaNetRepository
 
 __all__ = [
     "Binding",
@@ -20,8 +17,5 @@ __all__ = [
     "LexicalUnit",
     "LocalID",
     "Mapping",
-    "MetaNetRepository",
     "MetaphorEntry",
-    "load_lcc",
-    "load_metanet",
 ]

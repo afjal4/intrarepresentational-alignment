@@ -4,7 +4,34 @@ import xml.etree.ElementTree as ET
 from functools import lru_cache
 from pathlib import Path
 
-from .metanet import LccInstance
+from .models import LccInstance
+
+# ---------------------------------------------------------------------------
+# XML schema constants
+# ---------------------------------------------------------------------------
+
+_TAG_LM_INSTANCE   = "LmInstance"
+_TAG_TEXT_CONTENT  = "TextContent"
+_TAG_PREV          = "Prev"
+_TAG_CURRENT       = "Current"
+_TAG_NEXT          = "Next"
+_TAG_LM_SOURCE     = "LmSource"
+_TAG_LM_TARGET     = "LmTarget"
+_TAG_ANNOTATIONS   = "Annotations"
+_TAG_METAPHORICITY = "MetaphoricityAnnotation"
+_TAG_POLARITY      = "PolarityAnnotation"
+_TAG_INTENSITY     = "IntensityAnnotation"
+_TAG_CM_SOURCE     = "CMSourceAnnotation"
+
+_ATTR_ID             = "id"
+_ATTR_DOC_ID         = "docid"
+_ATTR_TARGET_CONCEPT = "targetConcept"
+_ATTR_TYPE           = "type"
+_ATTR_CHAIN          = "chain"
+_ATTR_SCORE          = "score"
+_ATTR_POLARITY       = "polarity"
+_ATTR_INTENSITY      = "intensity"
+_ATTR_SOURCE_CONCEPT = "sourceConcept"
 
 
 # ---------------------------------------------------------------------------
@@ -65,46 +92,46 @@ def _str_attrs(elem: ET.Element, child_tag: str, attr: str) -> list[str]:
 
 def _build_instance(elem: ET.Element) -> LccInstance:
     """Parse one <LmInstance> element into an LccInstance."""
-    text_content = elem.find("TextContent")
-    annotations = elem.find("Annotations")
+    text_content = elem.find(_TAG_TEXT_CONTENT)
+    annotations = elem.find(_TAG_ANNOTATIONS)
 
-    prev = _element_full_text(text_content.find("Prev")) if text_content is not None else None
-    current = _element_full_text(text_content.find("Current")) if text_content is not None else None
-    nxt = _element_full_text(text_content.find("Next")) if text_content is not None else None
+    prev = _element_full_text(text_content.find(_TAG_PREV)) if text_content is not None else None
+    current = _element_full_text(text_content.find(_TAG_CURRENT)) if text_content is not None else None
+    nxt = _element_full_text(text_content.find(_TAG_NEXT)) if text_content is not None else None
 
     source_exprs: list[str] = []
     target_exprs: list[str] = []
     if text_content is not None:
-        current_elem = text_content.find("Current")
+        current_elem = text_content.find(_TAG_CURRENT)
         if current_elem is not None:
-            source_exprs = _child_texts(current_elem, "LmSource")
-            target_exprs = _child_texts(current_elem, "LmTarget")
+            source_exprs = _child_texts(current_elem, _TAG_LM_SOURCE)
+            target_exprs = _child_texts(current_elem, _TAG_LM_TARGET)
 
     metaphoricity: list[float] = []
     polarity: list[str] = []
     intensity: list[float] = []
     source_concept: str | None = None
     if annotations is not None:
-        metaphoricity = _float_attrs(annotations, "MetaphoricityAnnotation", "score")
-        polarity = _str_attrs(annotations, "PolarityAnnotation", "polarity")
-        intensity = _float_attrs(annotations, "IntensityAnnotation", "intensity")
+        metaphoricity = _float_attrs(annotations, _TAG_METAPHORICITY, _ATTR_SCORE)
+        polarity = _str_attrs(annotations, _TAG_POLARITY, _ATTR_POLARITY)
+        intensity = _float_attrs(annotations, _TAG_INTENSITY, _ATTR_INTENSITY)
         # Pick the highest-scored CMSourceAnnotation (score > 0) as the
         # conceptual source domain label (e.g. "DISEASE", "STRUGGLE").
         best = max(
-            (a for a in annotations.iter("CMSourceAnnotation")
-             if float(a.get("score", 0)) > 0),
-            key=lambda a: float(a.get("score", 0)),
+            (a for a in annotations.iter(_TAG_CM_SOURCE)
+             if float(a.get(_ATTR_SCORE, 0)) > 0),
+            key=lambda a: float(a.get(_ATTR_SCORE, 0)),
             default=None,
         )
         if best is not None:
-            source_concept = best.get("sourceConcept")
+            source_concept = best.get(_ATTR_SOURCE_CONCEPT)
 
     return LccInstance(
-        id                   = elem.get("id", ""),
-        doc_id               = elem.get("docid", ""),
-        target_concept       = elem.get("targetConcept", ""),
-        instance_type        = elem.get("type", ""),
-        chain                = elem.get("chain", ""),
+        id                   = elem.get(_ATTR_ID, ""),
+        doc_id               = elem.get(_ATTR_DOC_ID, ""),
+        target_concept       = elem.get(_ATTR_TARGET_CONCEPT, ""),
+        instance_type        = elem.get(_ATTR_TYPE, ""),
+        chain                = elem.get(_ATTR_CHAIN, ""),
         prev_sentence        = prev,
         current_sentence     = current,
         next_sentence        = nxt,
@@ -132,7 +159,7 @@ def _load_lcc_cached(path_str: str) -> list[LccInstance]:
         raise ValueError(f"Could not parse LCC XML at '{path_str}': {e}") from e
 
     root = tree.getroot()
-    return [_build_instance(elem) for elem in root.iter("LmInstance")]
+    return [_build_instance(elem) for elem in root.iter(_TAG_LM_INSTANCE)]
 
 
 def load_lcc(path: str | Path) -> list[LccInstance]:

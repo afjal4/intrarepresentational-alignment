@@ -1,88 +1,193 @@
 from __future__ import annotations
 
+from abc import ABC, abstractmethod
 from dataclasses import dataclass
 
 import numpy as np
 
+DEFAULT_PERMUTATIONS = 1000
+DEFAULT_GED_THRESHOLD = 0.0
 
-def cka(K: np.ndarray, L: np.ndarray) -> float:
-    """Centered Kernel Alignment between two kernel matrices.
 
-    CKA(K, L) = HSIC(K, L) / sqrt(HSIC(K, K) * HSIC(L, L))
+def _validate_square_same_shape(K: np.ndarray, L: np.ndarray) -> None:
+    if K.ndim != 2 or L.ndim != 2:
+        raise ValueError("K and L must be 2D matrices")
+    if K.shape[0] != K.shape[1] or L.shape[0] != L.shape[1]:
+        raise ValueError("K and L must be square matrices")
+    if K.shape != L.shape:
+        raise ValueError("K and L must have the same shape")
 
-    where HSIC is estimated as tr(K_c L_c) with K_c = HKH the doubly-centred
-    kernel (H = I - 11^T/n).  Both K and L must be square and the same size.
-    Range: [0, 1].  A value of 1 means the two representations are identical
-    up to an orthogonal transformation and scaling.
-    """
-    n = K.shape[0]
-    H = np.eye(n) - np.ones((n, n)) / n
-    K_c = H @ K @ H
-    L_c = H @ L @ H
+
+def _validate_n_permutations(n_permutations: int) -> None:
+    if n_permutations <= 0:
+        raise ValueError("n_permutations must be > 0")
+
+
+def _center_kernel(kernel: np.ndarray) -> np.ndarray:
+    return kernel - kernel.mean(1, keepdims=True) - kernel.mean(0, keepdims=True) + kernel.mean()
+
+
+def _cka_from_centered(K_c: np.ndarray, L_c: np.ndarray) -> float:
     hsic_kl = np.sum(K_c * L_c)
     hsic_kk = np.sum(K_c * K_c)
     hsic_ll = np.sum(L_c * L_c)
-    return float(hsic_kl / np.sqrt(hsic_kk * hsic_ll))
+    denom = np.sqrt(hsic_kk * hsic_ll)
+    if denom == 0:
+        return 0.0
+    return float(hsic_kl / denom)
+
+
+def cka(K: np.ndarray, L: np.ndarray) -> float:
+    """Centered Kernel Alignment between two kernel matrices."""
+    _validate_square_same_shape(K, L)
+    return _cka_from_centered(_center_kernel(K), _center_kernel(L))
 
 
 @dataclass
 class PermutationTestResult:
     observed: float
-    null: np.ndarray   # CKA scores under the null
+    null: np.ndarray
     p_value: float
+
+
+class _PermutationStatistic(ABC):
+    @abstractmethod
+    def setup(self, K: np.ndarray, L: np.ndarray) -> None:
+        ...
+
+    @abstractmethod
+    def observed(self) -> float:
+        ...
+
+    @abstractmethod
+    def score_permutation(self, pi: np.ndarray) -> float:
+        ...
+
+    @abstractmethod
+    def p_value(self, observed: float, null: np.ndarray) -> float:
+        ...
+
+
+def _run_permutation_test(
+    K: np.ndarray,
+    L: np.ndarray,
+    statistic: _PermutationStatistic,
+    n_permutations: int,
+    rng: np.random.Generator,
+) -> PermutationTestResult:
+    _validate_square_same_shape(K, L)
+    _validate_n_permutations(n_permutations)
+
+    statistic.setup(K, L)
+    observed = statistic.observed()
+    null = np.empty(n_permutations, dtype=float)
+    n = K.shape[0]
+    for i in range(n_permutations):
+        null[i] = statistic.score_permutation(rng.permutation(n))
+
+    return PermutationTestResult(
+        observed=observed,
+        null=null,
+        p_value=statistic.p_value(observed, null),
+    )
+
+
+class _CKAStatistic(_PermutationStatistic):
+    def __init__(self) -> None:
+        self._K_c: np.ndarray | None = None
+        self._L_c: np.ndarray | None = None
+        self._denom: float | None = None
+        self._degenerate = False
+
+    def setup(self, K: np.ndarray, L: np.ndarray) -> None:
+        K_c = _center_kernel(K)
+        L_c = _center_kernel(L)
+        hsic_kk = float(np.sum(K_c * K_c))
+        hsic_ll = float(np.sum(L_c * L_c))
+        denom = float(np.sqrt(hsic_kk * hsic_ll))
+        if denom == 0:
+            self._degenerate = True
+            self._K_c = K_c
+            self._L_c = L_c
+            self._denom = 1.0
+            return
+        self._degenerate = False
+        self._K_c = K_c
+        self._L_c = L_c
+        self._denom = denom
+
+    def observed(self) -> float:
+        if self._K_c is None or self._L_c is None or self._denom is None:
+            raise RuntimeError("setup() must be called before observed()")
+        if self._degenerate:
+            return 0.0
+        return float(np.sum(self._K_c * self._L_c) / self._denom)
+
+    def score_permutation(self, pi: np.ndarray) -> float:
+        if self._K_c is None or self._L_c is None or self._denom is None:
+            raise RuntimeError("setup() must be called before score_permutation()")
+        if self._degenerate:
+            return 0.0
+        permuted_L_c = self._L_c[np.ix_(pi, pi)]
+        return float(np.sum(self._K_c * permuted_L_c) / self._denom)
+
+    def p_value(self, observed: float, null: np.ndarray) -> float:
+        return float((null >= observed).mean())
+
+
+class _GEDStatistic(_PermutationStatistic):
+    def __init__(self, threshold: float) -> None:
+        self._threshold = threshold
+        self._K: np.ndarray | None = None
+        self._L: np.ndarray | None = None
+
+    def setup(self, K: np.ndarray, L: np.ndarray) -> None:
+        self._K = K
+        self._L = L
+
+    def observed(self) -> float:
+        if self._K is None or self._L is None:
+            raise RuntimeError("setup() must be called before observed()")
+        return ged(self._K, self._L, self._threshold)
+
+    def score_permutation(self, pi: np.ndarray) -> float:
+        if self._K is None or self._L is None:
+            raise RuntimeError("setup() must be called before score_permutation()")
+        return ged(self._K, self._L[np.ix_(pi, pi)], self._threshold)
+
+    def p_value(self, observed: float, null: np.ndarray) -> float:
+        return float((null <= observed).mean())
 
 
 def cka_permutation_test(
     K: np.ndarray,
     L: np.ndarray,
-    n_permutations: int = 1000,
+    n_permutations: int = DEFAULT_PERMUTATIONS,
     rng: np.random.Generator | None = None,
 ) -> PermutationTestResult:
-    """Test whether CKA(K, L) is significantly above chance.
-
-    Under the null hypothesis the pairing between the N items in K and the N
-    items in L is arbitrary.  Each permutation shuffles the row/column order of
-    L (equivalently, breaks the S→T correspondence) and recomputes CKA.  The
-    p-value is the fraction of null scores >= the observed score.
-    """
+    """Test whether CKA(K, L) is significantly above chance."""
     if rng is None:
         rng = np.random.default_rng()
-
-    observed = cka(K, L)
-    null = np.empty(n_permutations)
-    n = K.shape[0]
-
-    for i in range(n_permutations):
-        pi = rng.permutation(n)
-        null[i] = cka(K, L[np.ix_(pi, pi)])
-
-    p_value = float((null >= observed).mean())
-    return PermutationTestResult(observed=observed, null=null, p_value=p_value)
+    return _run_permutation_test(
+        K=K,
+        L=L,
+        statistic=_CKAStatistic(),
+        n_permutations=n_permutations,
+        rng=rng,
+    )
 
 
-def ged(K: np.ndarray, L: np.ndarray, threshold: float = 0.0) -> float:
-    """Graph Edit Distance between two weighted kernel matrices.
-
-    Node correspondences are assumed fixed: both matrices are over the same
-    N items in the same order (the paired S→T expressions), so GED reduces
-    to a sum of per-edge edit costs over the upper triangle:
-
-      - Deletion  (edge in K, absent in L):  cost = K[i,j]
-      - Insertion (edge in L, absent in K):  cost = L[i,j]
-      - Substitution (edge in both):         cost = |K[i,j] - L[i,j]|
-      - Absent in both:                      cost = 0
-
-    Entries at or below `threshold` are treated as absent edges.
-    The result is normalised by the total edge weight of both graphs so
-    it lies in [0, 1] regardless of matrix size or density.
-    """
+def ged(K: np.ndarray, L: np.ndarray, threshold: float = DEFAULT_GED_THRESHOLD) -> float:
+    """Graph Edit Distance between two weighted kernel matrices."""
+    _validate_square_same_shape(K, L)
     idx = np.triu_indices(K.shape[0], k=1)
     k, l = K[idx], L[idx]
 
     k_present = k > threshold
     l_present = l > threshold
 
-    cost  = np.sum(np.abs(k[k_present & l_present] - l[k_present & l_present]))
+    both = k_present & l_present
+    cost = np.sum(np.abs(k[both] - l[both]))
     cost += np.sum(k[k_present & ~l_present])
     cost += np.sum(l[~k_present & l_present])
 
@@ -93,25 +198,17 @@ def ged(K: np.ndarray, L: np.ndarray, threshold: float = 0.0) -> float:
 def ged_permutation_test(
     K: np.ndarray,
     L: np.ndarray,
-    threshold: float = 0.0,
-    n_permutations: int = 1000,
+    threshold: float = DEFAULT_GED_THRESHOLD,
+    n_permutations: int = DEFAULT_PERMUTATIONS,
     rng: np.random.Generator | None = None,
 ) -> PermutationTestResult:
-    """Test whether GED(K, L) is significantly below chance (lower = more similar).
-
-    Each permutation shuffles the row/column order of L, breaking the S→T
-    correspondence.  The p-value is the fraction of null GEDs <= observed GED.
-    """
+    """Test whether GED(K, L) is significantly below chance."""
     if rng is None:
         rng = np.random.default_rng()
-
-    observed = ged(K, L, threshold)
-    null = np.empty(n_permutations)
-    n = K.shape[0]
-
-    for i in range(n_permutations):
-        pi = rng.permutation(n)
-        null[i] = ged(K, L[np.ix_(pi, pi)], threshold)
-
-    p_value = float((null <= observed).mean())
-    return PermutationTestResult(observed=observed, null=null, p_value=p_value)
+    return _run_permutation_test(
+        K=K,
+        L=L,
+        statistic=_GEDStatistic(threshold=threshold),
+        n_permutations=n_permutations,
+        rng=rng,
+    )
