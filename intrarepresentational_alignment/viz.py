@@ -243,18 +243,27 @@ def print_alignment_table(
     domain_results: dict[tuple[str, str], DomainAlignmentResult],
     keys: list[tuple[str, str]] | None = None,
 ) -> None:
-    """Print a CKA/GED comparison table for the given domain pairs."""
+    """Print a CKA/GED/WL/MCS comparison table for the given domain pairs."""
     if keys is None:
         keys = list(domain_results)
-    print(f"{'Source domain':<28} {'Target domain':<22} {'CKA':>6}  {'GED':>6}  {'p(CKA)':>7}  {'p(GED)':>7}")
-    print("-" * 82)
+    print(
+        f"{'Source domain':<28} {'Target domain':<22} "
+        f"{'CKA':>6}  {'GED':>6}  {'WL':>6}  {'MCS':>6}  "
+        f"{'p(CKA)':>7}  {'p(GED)':>7}  {'p(WL)':>6}  {'p(MCS)':>7}"
+    )
+    print("-" * 110)
     for key in keys:
         r = domain_results[key]
         src, tgt = key
-        print(f"{src:<28} {tgt:<22} "
-              f"{r.cka.observed:>6.3f}  {r.ged.observed:>6.3f}  "
-              f"{r.cka.p_value:>6.3f}{'*' if r.cka.p_value < 0.05 else ' '}  "
-              f"{r.ged.p_value:>6.3f}{'*' if r.ged.p_value < 0.05 else ' '}")
+        print(
+            f"{src:<28} {tgt:<22} "
+            f"{r.cka.observed:>6.3f}  {r.ged.observed:>6.3f}  "
+            f"{r.wl.observed:>6.3f}  {r.mcs.observed:>6.3f}  "
+            f"{r.cka.p_value:>6.3f}{'*' if r.cka.p_value < 0.05 else ' '}  "
+            f"{r.ged.p_value:>6.3f}{'*' if r.ged.p_value < 0.05 else ' '}  "
+            f"{r.wl.p_value:>5.3f}{'*' if r.wl.p_value < 0.05 else ' '}  "
+            f"{r.mcs.p_value:>6.3f}{'*' if r.mcs.p_value < 0.05 else ' '}"
+        )
 
 
 def print_summary_table(
