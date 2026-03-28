@@ -215,25 +215,33 @@ def plot_null_distributions(
     ged_res: PermutationTestResult,
     source_concept: str,
     target_concept: str,
+    wl_res: PermutationTestResult | None = None,
+    mcs_res: PermutationTestResult | None = None,
 ) -> None:
-    """Permutation null distribution histograms for CKA and GED."""
-    fig, axes = plt.subplots(1, 2, figsize=(14, 5))
+    """Permutation null distribution histograms for CKA, GED, and optionally WL and MCS."""
+    metrics = [
+        (cka_res, "#3498db", "CKA  (higher = more similar)"),
+        (ged_res, "#e67e22", "GED  (lower = more similar)"),
+    ]
+    if wl_res is not None:
+        metrics.append((wl_res, "#2ecc71", "WL distance  (lower = more similar)"))
+    if mcs_res is not None:
+        metrics.append((mcs_res, "#9b59b6", "MCS distance  (lower = more similar)"))
 
-    axes[0].hist(cka_res.null, bins=40, color="#3498db", edgecolor="white", alpha=0.85)
-    axes[0].axvline(cka_res.observed, color="#e74c3c", linewidth=2.5,
-                    label=f"observed = {cka_res.observed:.3f}\np = {cka_res.p_value:.3f}")
-    axes[0].set_xlabel("CKA  (higher = more similar)", fontsize=10)
-    axes[0].set_ylabel("count", fontsize=10)
-    axes[0].set_title(f"CKA permutation null  \u2014  {source_concept} -> {target_concept}", fontsize=11)
-    axes[0].legend(fontsize=10)
+    n = len(metrics)
+    fig, axes = plt.subplots(1, n, figsize=(7 * n, 5))
+    if n == 1:
+        axes = [axes]
 
-    axes[1].hist(ged_res.null, bins=40, color="#e67e22", edgecolor="white", alpha=0.85)
-    axes[1].axvline(ged_res.observed, color="#e74c3c", linewidth=2.5,
-                    label=f"observed = {ged_res.observed:.3f}\np = {ged_res.p_value:.3f}")
-    axes[1].set_xlabel("GED  (lower = more similar)", fontsize=10)
-    axes[1].set_ylabel("count", fontsize=10)
-    axes[1].set_title(f"GED permutation null  \u2014  {source_concept} -> {target_concept}", fontsize=11)
-    axes[1].legend(fontsize=10)
+    for ax, (res, color, xlabel) in zip(axes, metrics):
+        ax.hist(res.null, bins=40, color=color, edgecolor="white", alpha=0.85)
+        ax.axvline(res.observed, color="#e74c3c", linewidth=2.5,
+                   label=f"observed = {res.observed:.3f}\np = {res.p_value:.3f}")
+        ax.set_xlabel(xlabel, fontsize=10)
+        ax.set_ylabel("count", fontsize=10)
+        metric_name = xlabel.split()[0]
+        ax.set_title(f"{metric_name} permutation null  \u2014  {source_concept} -> {target_concept}", fontsize=11)
+        ax.legend(fontsize=10)
 
     plt.tight_layout()
     plt.show()
