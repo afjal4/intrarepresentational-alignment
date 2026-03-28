@@ -8,9 +8,12 @@ import numpy as np
 from .alignment import (
     DEFAULT_GED_THRESHOLD,
     DEFAULT_PERMUTATIONS,
+    DEFAULT_WL_ITERATIONS,
     PermutationTestResult,
     cka_permutation_test,
     ged_permutation_test,
+    mcs_permutation_test,
+    wl_permutation_test,
 )
 from .data import LccInstance
 from .embedding import Embedder
@@ -29,6 +32,8 @@ class DomainAlignmentResult:
     n_pairs: int
     cka: PermutationTestResult
     ged: PermutationTestResult
+    wl: PermutationTestResult
+    mcs: PermutationTestResult
     K_source: np.ndarray | None = None
     K_target: np.ndarray | None = None
 
@@ -58,12 +63,13 @@ def analyse_domain_pairs(
     matrix_strategy: MatrixComputationStrategy | None = None,
     n_permutations: int = DEFAULT_PERMUTATIONS,
     ged_threshold: float = DEFAULT_GED_THRESHOLD,
+    wl_n_iter: int = DEFAULT_WL_ITERATIONS,
     rng: np.random.Generator | None = None,
     min_pairs: int = 1,
     max_pairs: int | None = None,
     return_kernels: bool = False,
 ) -> dict[tuple[str, str], DomainAlignmentResult]:
-    """Compute CKA and GED alignment for each (source_concept, target_concept) group.
+    """Compute CKA, GED, WL and MCS alignment for each (source_concept, target_concept) group.
 
     Returns a result for every group in *domain_pairs* that meets the
     *min_pairs* / *max_pairs* size constraints.
@@ -93,6 +99,8 @@ def analyse_domain_pairs(
             n_pairs=n,
             cka=cka_permutation_test(K_S, K_T, n_permutations=n_permutations, rng=rng),
             ged=ged_permutation_test(K_S, K_T, threshold=ged_threshold, n_permutations=n_permutations, rng=rng),
+            wl=wl_permutation_test(K_S, K_T, n_iter=wl_n_iter, n_permutations=n_permutations, rng=rng),
+            mcs=mcs_permutation_test(K_S, K_T, n_permutations=n_permutations, rng=rng),
             K_source=K_S if return_kernels else None,
             K_target=K_T if return_kernels else None,
         )
