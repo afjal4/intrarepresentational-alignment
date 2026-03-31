@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from .embedding import Embedder
 from .graph import EpsilonThreshold, KNN, SparsificationStrategy, TopFraction
-from .models import EmbeddingModel
+from .embedding_models import EmbeddingModel
 from .similarity import (
     ChunkedComputationStrategy,
     CosineSimilarity,

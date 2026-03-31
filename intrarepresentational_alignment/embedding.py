@@ -3,7 +3,7 @@ from functools import lru_cache
 import numpy as np
 from sentence_transformers import SentenceTransformer
 
-from .models import EmbeddingModel
+from .embedding_models import EmbeddingModel
 
 _SINGLE_EMBED_CACHE_SIZE = 4096
 

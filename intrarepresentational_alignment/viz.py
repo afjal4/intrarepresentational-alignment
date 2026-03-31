@@ -6,7 +6,24 @@ import networkx as nx
 import numpy as np
 
 from .alignment import PermutationTestResult
-from .analysis import DomainAlignmentResult
+from .results import DomainAlignmentResult
+
+_GRAPH_NODE_SIZE = 4000
+_GRAPH_LABEL_FONT_SIZE = 22.5
+_GRAPH_EDGE_WIDTH_MAX = 3.5
+_GRAPH_EDGE_EPSILON = 1e-9
+_GRAPH_PAIR_LINE_WIDTH = 0.7
+
+_SIG_COLOR = "#e74c3c"
+_INSIG_COLOR = "#95a5a6"
+_SIG_THRESHOLD = 0.05
+
+
+def _is_significant(result: DomainAlignmentResult) -> bool:
+    return any(
+        getattr(result, attr).p_value < _SIG_THRESHOLD
+        for attr in ("cka", "ged", "wl", "mcs")
+    )
 
 
 def plot_cka_bar(
@@ -16,7 +33,7 @@ def plot_cka_bar(
     keys   = sorted(domain_results, key=lambda k: domain_results[k].cka.observed, reverse=True)
     scores = [domain_results[k].cka.observed for k in keys]
     p_vals = [domain_results[k].cka.p_value  for k in keys]
-    colors = ["#e74c3c" if p < 0.05 else "#95a5a6" for p in p_vals]
+    colors = [_SIG_COLOR if p < _SIG_THRESHOLD else _INSIG_COLOR for p in p_vals]
 
     fig, ax = plt.subplots(figsize=(12, 7))
     ax.barh(range(len(keys)), scores, color=colors, edgecolor="white")
@@ -32,8 +49,8 @@ def plot_cka_bar(
     ax.set_xlim(left=0)
     ax.legend(
         handles=[
-            mpatches.Patch(color="#e74c3c", label="p < 0.05"),
-            mpatches.Patch(color="#95a5a6", label="p >= 0.05"),
+            mpatches.Patch(color=_SIG_COLOR, label="p < 0.05"),
+            mpatches.Patch(color=_INSIG_COLOR, label="p >= 0.05"),
         ],
         loc="lower right",
         fontsize=9,
@@ -50,20 +67,19 @@ def plot_ged_vs_cka(
     ged_scores = [domain_results[k].ged.observed for k in keys]
     cka_scores = [domain_results[k].cka.observed for k in keys]
     ged_p      = [domain_results[k].ged.p_value  for k in keys]
+    cka_p      = [domain_results[k].cka.p_value  for k in keys]
     labels     = [f"{s}  \u2192  {t}" for s, t in keys]
 
     y = np.arange(len(keys))
     fig, axes = plt.subplots(1, 2, figsize=(16, 6))
 
-    axes[0].barh(y, ged_scores, color=["#e74c3c" if p < 0.05 else "#95a5a6" for p in ged_p], edgecolor="white")
+    axes[0].barh(y, ged_scores, color=[_SIG_COLOR if p < _SIG_THRESHOLD else _INSIG_COLOR for p in ged_p], edgecolor="white")
     axes[0].set_yticks(y)
     axes[0].set_yticklabels(labels, fontsize=8)
     axes[0].set_xlabel("Normalised GED  (lower = more similar)", fontsize=9)
     axes[0].set_title("Graph Edit Distance\n(red = p < 0.05)", fontsize=10)
 
-    axes[1].barh(y, cka_scores,
-                 color=["#e74c3c" if domain_results[k].cka.p_value < 0.05 else "#95a5a6" for k in keys],
-                 edgecolor="white")
+    axes[1].barh(y, cka_scores, color=[_SIG_COLOR if p < _SIG_THRESHOLD else _INSIG_COLOR for p in cka_p], edgecolor="white")
     axes[1].set_yticks(y)
     axes[1].set_yticklabels(labels, fontsize=8)
     axes[1].set_xlabel("CKA  (higher = more similar)", fontsize=9)
@@ -93,9 +109,9 @@ def plot_dense_vs_sparse(
             label=f"Sparse cosine (TopFraction {int(edge_fraction * 100)}%)")
 
     for i, (ds, ss, dp, sp) in enumerate(zip(dense_scores, sparse_scores, dense_p, sparse_p)):
-        if dp < 0.05:
+        if dp < _SIG_THRESHOLD:
             ax.text(ds + 0.001, i + h / 2, "*", va="center", color="#3498db", fontweight="bold")
-        if sp < 0.05:
+        if sp < _SIG_THRESHOLD:
             ax.text(ss + 0.001, i - h / 2, "*", va="center", color="#e67e22", fontweight="bold")
 
     ax.set_yticks(y)
@@ -158,35 +174,28 @@ def plot_semantic_graphs(
 ) -> None:
     """Spring-layout graphs of the sparse source and target kernels."""
 
-    def _adj_to_graph(adj: np.ndarray) -> nx.Graph:
-        G = nx.Graph()
-        G.add_nodes_from(range(adj.shape[0]))
-        for i in range(adj.shape[0]):
-            for j in range(i + 1, adj.shape[0]):
-                if adj[i, j] > 0:
-                    G.add_edge(i, j, weight=float(adj[i, j]))
-        return G
-
     def _draw(ax, G: nx.Graph, labels: list[str], title: str, color: str) -> dict:
         pos = nx.spring_layout(G, seed=42, weight="weight")
         weights = np.array([G[u][v]["weight"] for u, v in G.edges()]) if G.edges() else np.array([])
         w_scaled = (
-            (0.5 + 3.5 * (weights - weights.min()) / (weights.max() - weights.min() + 1e-9)).tolist()
+            (0.5 + _GRAPH_EDGE_WIDTH_MAX * (weights - weights.min()) / (weights.max() - weights.min() + _GRAPH_EDGE_EPSILON)).tolist()
             if len(weights) else []
         )
         nx.draw_networkx_edges(ax=ax, G=G, pos=pos, width=w_scaled, alpha=0.55, edge_color="#888888")
-        nx.draw_networkx_nodes(ax=ax, G=G, pos=pos, node_size=4000, node_color=color, alpha=0.9)
+        nx.draw_networkx_nodes(ax=ax, G=G, pos=pos, node_size=_GRAPH_NODE_SIZE, node_color=color, alpha=0.9)
         nx.draw_networkx_labels(
             ax=ax, G=G, pos=pos,
             labels={i: labels[i][:22] for i in G.nodes()},
-            font_size=22.5, font_color="#111111",
+            font_size=_GRAPH_LABEL_FONT_SIZE, font_color="#111111",
         )
         ax.set_title(f"{title}\n{G.number_of_nodes()} nodes  |  {G.number_of_edges()} edges", fontsize=11)
         ax.axis("off")
         return pos
 
-    G_S = _adj_to_graph(K_S_sparse)
-    G_T = _adj_to_graph(K_T_sparse)
+    np.fill_diagonal(K_S_sparse, 0.0)
+    np.fill_diagonal(K_T_sparse, 0.0)
+    G_S = nx.from_numpy_array(K_S_sparse)
+    G_T = nx.from_numpy_array(K_T_sparse)
 
     fig, axes = plt.subplots(1, 2, figsize=(20, 9))
     pos_S = _draw(axes[0], G_S, src_texts, f"Source graph  ({source_concept} expressions)", "#3498db")
@@ -198,7 +207,7 @@ def plot_semantic_graphs(
         fig.add_artist(mpatches.ConnectionPatch(
             xyA=pos_S[i], xyB=pos_T[i],
             coordsA=axes[0].transData, coordsB=axes[1].transData,
-            linestyle="dotted", linewidth=0.7, color="#999999", alpha=0.5, clip_on=False,
+            linestyle="dotted", linewidth=_GRAPH_PAIR_LINE_WIDTH, color="#999999", alpha=0.5, clip_on=False,
         ))
 
     fig.suptitle(
@@ -235,7 +244,7 @@ def plot_null_distributions(
 
     for ax, (res, color, xlabel) in zip(axes, metrics):
         ax.hist(res.null, bins=40, color=color, edgecolor="white", alpha=0.85)
-        ax.axvline(res.observed, color="#e74c3c", linewidth=2.5,
+        ax.axvline(res.observed, color=_SIG_COLOR, linewidth=2.5,
                    label=f"observed = {res.observed:.3f}\np = {res.p_value:.3f}")
         ax.set_xlabel(xlabel, fontsize=10)
         ax.set_ylabel("count", fontsize=10)
@@ -247,6 +256,36 @@ def plot_null_distributions(
     plt.show()
 
 
+def print_domain_summary(
+    result: DomainAlignmentResult,
+    source_concept: str,
+    target_concept: str,
+) -> None:
+    """Print CKA/GED/WL/MCS observed values and p-values for a single domain pair."""
+    print(f"{source_concept} -> {target_concept}: {result.n_pairs} expression pairs")
+    print(f"CKA = {result.cka.observed:.3f}  (p = {result.cka.p_value:.3f})")
+    print(f"GED = {result.ged.observed:.3f}  (p = {result.ged.p_value:.3f})")
+    print(f"WL  = {result.wl.observed:.3f}  (p = {result.wl.p_value:.3f})")
+    print(f"MCS = {result.mcs.observed:.3f}  (p = {result.mcs.p_value:.3f})")
+
+
+def print_cka_table(
+    domain_results: dict[tuple[str, str], DomainAlignmentResult],
+    keys: list[tuple[str, str]] | None = None,
+) -> None:
+    """Print a compact CKA score and p-value table."""
+    if keys is None:
+        keys = list(domain_results)
+    header = f"{'Source domain':<28} {'Target domain':<22} {'n':>4}  {'CKA':>6}  {'p':>6}"
+    print(header)
+    print("-" * len(header))
+    for key in keys:
+        r = domain_results[key]
+        src, tgt = key
+        sig = " *" if r.cka.p_value < _SIG_THRESHOLD else ""
+        print(f"{src:<28} {tgt:<22} {r.n_pairs:>4}  {r.cka.observed:>6.3f}  {r.cka.p_value:>6.3f}{sig}")
+
+
 def print_alignment_table(
     domain_results: dict[tuple[str, str], DomainAlignmentResult],
     keys: list[tuple[str, str]] | None = None,
@@ -254,12 +293,13 @@ def print_alignment_table(
     """Print a CKA/GED/WL/MCS comparison table for the given domain pairs."""
     if keys is None:
         keys = list(domain_results)
-    print(
+    header = (
         f"{'Source domain':<28} {'Target domain':<22} "
         f"{'CKA':>6}  {'GED':>6}  {'WL':>6}  {'MCS':>6}  "
         f"{'p(CKA)':>7}  {'p(GED)':>7}  {'p(WL)':>6}  {'p(MCS)':>7}"
     )
-    print("-" * 110)
+    print(header)
+    print("-" * len(header))
     for key in keys:
         r = domain_results[key]
         src, tgt = key
@@ -267,10 +307,10 @@ def print_alignment_table(
             f"{src:<28} {tgt:<22} "
             f"{r.cka.observed:>6.3f}  {r.ged.observed:>6.3f}  "
             f"{r.wl.observed:>6.3f}  {r.mcs.observed:>6.3f}  "
-            f"{r.cka.p_value:>6.3f}{'*' if r.cka.p_value < 0.05 else ' '}  "
-            f"{r.ged.p_value:>6.3f}{'*' if r.ged.p_value < 0.05 else ' '}  "
-            f"{r.wl.p_value:>5.3f}{'*' if r.wl.p_value < 0.05 else ' '}  "
-            f"{r.mcs.p_value:>6.3f}{'*' if r.mcs.p_value < 0.05 else ' '}"
+            f"{r.cka.p_value:>6.3f}{'*' if r.cka.p_value < _SIG_THRESHOLD else ' '}  "
+            f"{r.ged.p_value:>6.3f}{'*' if r.ged.p_value < _SIG_THRESHOLD else ' '}  "
+            f"{r.wl.p_value:>5.3f}{'*' if r.wl.p_value < _SIG_THRESHOLD else ' '}  "
+            f"{r.mcs.p_value:>6.3f}{'*' if r.mcs.p_value < _SIG_THRESHOLD else ' '}"
         )
 
 
@@ -282,14 +322,8 @@ def print_summary_table(
     if keys is None:
         keys = list(domain_results)
 
-    def _any_sig(r: DomainAlignmentResult) -> bool:
-        return any(
-            getattr(r, attr).p_value < 0.05
-            for attr in ("cka", "ged", "wl", "mcs")
-        )
-
     interesting = sorted(
-        [k for k in keys if _any_sig(domain_results[k])],
+        [k for k in keys if _is_significant(domain_results[k])],
         key=lambda k: domain_results[k].cka.observed,
         reverse=True,
     )
@@ -306,37 +340,70 @@ def print_summary_table(
         r = domain_results[key]
         print(
             f"{src:<22}  {tgt:<22}  {r.n_pairs:>4}  "
-            f"{r.cka.observed:>6.3f}  {r.cka.p_value:>6.3f}{'*' if r.cka.p_value < 0.05 else ' '}  "
-            f"{r.ged.observed:>6.3f}  {r.ged.p_value:>6.3f}{'*' if r.ged.p_value < 0.05 else ' '}  "
-            f"{r.wl.observed:>6.3f}  {r.wl.p_value:>5.3f}{'*' if r.wl.p_value < 0.05 else ' '}  "
-            f"{r.mcs.observed:>6.3f}  {r.mcs.p_value:>6.3f}{'*' if r.mcs.p_value < 0.05 else ' '}"
+            f"{r.cka.observed:>6.3f}  {r.cka.p_value:>6.3f}{'*' if r.cka.p_value < _SIG_THRESHOLD else ' '}  "
+            f"{r.ged.observed:>6.3f}  {r.ged.p_value:>6.3f}{'*' if r.ged.p_value < _SIG_THRESHOLD else ' '}  "
+            f"{r.wl.observed:>6.3f}  {r.wl.p_value:>5.3f}{'*' if r.wl.p_value < _SIG_THRESHOLD else ' '}  "
+            f"{r.mcs.observed:>6.3f}  {r.mcs.p_value:>6.3f}{'*' if r.mcs.p_value < _SIG_THRESHOLD else ' '}"
         )
     print(sep)
     print(f"  {len(interesting)} of {len(keys)} domain pairs significant at p < 0.05")
 
 
-def print_graph_distances_table(
-    domain_results: dict[tuple[str, str], DomainAlignmentResult],
+def print_significance_summary(
+    dense_results: dict[tuple[str, str], DomainAlignmentResult],
+    sparse_results: dict[tuple[str, str], DomainAlignmentResult],
     keys: list[tuple[str, str]] | None = None,
 ) -> None:
-    """Print WL and MCS distance results alongside CKA and GED for all domain pairs."""
+    """Print a per-metric count of significant domain pairs for dense and sparse kernels."""
     if keys is None:
-        keys = list(domain_results)
-    print(
+        keys = list(dense_results)
+    n = len(keys)
+
+    metrics = ("cka", "ged", "wl", "mcs")
+    labels  = ("CKA", "GED", "WL", "MCS")
+
+    def _sig_count(results: dict, metric: str) -> int:
+        return sum(1 for k in keys if getattr(results[k], metric).p_value < _SIG_THRESHOLD)
+
+    dense_counts  = [_sig_count(dense_results,  m) for m in metrics]
+    sparse_counts = [_sig_count(sparse_results, m) for m in metrics]
+
+    dense_any  = sum(1 for k in keys if _is_significant(dense_results[k]))
+    sparse_any = sum(1 for k in keys if _is_significant(sparse_results[k]))
+
+    col = 10
+    header = f"{'Metric':<8}  {'Dense':>{col}}  {'Sparse':>{col}}"
+    sep    = "-" * len(header)
+    print(header)
+    print(sep)
+    for label, dc, sc in zip(labels, dense_counts, sparse_counts):
+        print(f"{label:<8}  {dc:>{col}} / {n}  {sc:>{col}} / {n}")
+    print(sep)
+    print(f"{'Any':<8}  {dense_any:>{col}} / {n}  {sparse_any:>{col}} / {n}")
+
+
+def print_dense_vs_sparse_table(
+    dense_results: dict[tuple[str, str], DomainAlignmentResult],
+    sparse_results: dict[tuple[str, str], DomainAlignmentResult],
+    keys: list[tuple[str, str]] | None = None,
+) -> None:
+    """Print a comparison of dense vs. sparse CKA scores."""
+    if keys is None:
+        keys = list(dense_results)
+    header = (
         f"{'Source domain':<28} {'Target domain':<22} "
-        f"{'CKA':>6}  {'GED':>6}  {'WL':>6}  {'MCS':>6}  "
-        f"{'p(CKA)':>7}  {'p(GED)':>7}  {'p(WL)':>6}  {'p(MCS)':>7}"
+        f"{'CKA(dense)':>10}  {'CKA(sparse)':>11}  {'p(dense)':>8}  {'p(sparse)':>9}"
     )
-    print("-" * 102)
+    print(header)
+    print("-" * len(header))
     for key in keys:
-        r = domain_results[key]
         src, tgt = key
+        dense    = dense_results[key]
+        sparse_r = sparse_results[key]
+        sig_d = " *" if dense.cka.p_value    < _SIG_THRESHOLD else "  "
+        sig_s = " *" if sparse_r.cka.p_value < _SIG_THRESHOLD else "  "
         print(
             f"{src:<28} {tgt:<22} "
-            f"{r.cka.observed:>6.3f}  {r.ged.observed:>6.3f}  "
-            f"{r.wl.observed:>6.3f}  {r.mcs.observed:>6.3f}  "
-            f"{r.cka.p_value:>6.3f}{'*' if r.cka.p_value < 0.05 else ' '}  "
-            f"{r.ged.p_value:>6.3f}{'*' if r.ged.p_value < 0.05 else ' '}  "
-            f"{r.wl.p_value:>5.3f}{'*' if r.wl.p_value < 0.05 else ' '}  "
-            f"{r.mcs.p_value:>6.3f}{'*' if r.mcs.p_value < 0.05 else ' '}"
+            f"{dense.cka.observed:>10.3f}  {sparse_r.cka.observed:>11.3f}  "
+            f"{dense.cka.p_value:>8.3f}{sig_d}  {sparse_r.cka.p_value:>9.3f}{sig_s}"
         )
