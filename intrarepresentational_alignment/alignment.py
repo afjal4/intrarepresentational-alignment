@@ -7,7 +7,7 @@ import networkx as nx
 import numpy as np
 
 DEFAULT_PERMUTATIONS = 1000
-DEFAULT_GED_THRESHOLD = 0.0
+DEFAULT_GED_THRESHOLD = 0.4
 DEFAULT_WL_ITERATIONS = 3
 
 

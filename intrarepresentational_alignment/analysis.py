@@ -59,6 +59,7 @@ def group_domain_pairs(
 
 
 DEFAULT_MCS_EDGE_FRACTION: float = 0.2
+DEFAULT_SPARSE_CKA_FRACTION: float = 0.15
 
 
 def analyse_domain_pairs(
@@ -80,15 +81,14 @@ def analyse_domain_pairs(
     Returns a result for every group in *domain_pairs* that meets the
     *min_pairs* / *max_pairs* size constraints.
 
-    Binary MCS is computed on TopFraction(*mcs_edge_fraction*)-sparsified kernels,
-    ensuring equal edge density in both graphs regardless of their similarity distributions.
+    Binary MCS is computed on dense kernels with edges binarized at *ged_threshold*.
+    This ensures MCS captures the graph structure similarity across the full domain.
+    (The *mcs_edge_fraction* parameter is deprecated and no longer used.)
     """
     if metric is None:
         metric = CosineSimilarity()
     if rng is None:
         rng = np.random.default_rng()
-
-    mcs_sparsify = TopFraction(mcs_edge_fraction)
 
     results: dict[tuple[str, str], DomainAlignmentResult] = {}
     for key, pairs in domain_pairs.items():
@@ -105,15 +105,13 @@ def analyse_domain_pairs(
         T = embedder.embed(tgt_texts)
         K_S = compute_similarity_matrix(metric, S, strategy=matrix_strategy)
         K_T = compute_similarity_matrix(metric, T, strategy=matrix_strategy)
-        K_S_mcs = mcs_sparsify(K_S)
-        K_T_mcs = mcs_sparsify(K_T)
 
         results[key] = DomainAlignmentResult(
             n_pairs=n,
             cka=cka_permutation_test(K_S, K_T, n_permutations=n_permutations, rng=rng),
             ged=ged_permutation_test(K_S, K_T, threshold=ged_threshold, n_permutations=n_permutations, rng=rng),
             wl=wl_permutation_test(K_S, K_T, n_iter=wl_n_iter, n_permutations=n_permutations, rng=rng),
-            mcs=mcs_permutation_test(K_S_mcs, K_T_mcs, n_permutations=n_permutations, rng=rng),
+            mcs=mcs_permutation_test(K_S, K_T, threshold=ged_threshold, n_permutations=n_permutations, rng=rng),
             K_source=K_S if return_kernels else None,
             K_target=K_T if return_kernels else None,
         )
@@ -231,8 +229,8 @@ def setup_domain_analysis(
     n_perms: int,
     ged_threshold: float,
     mcs_edge_fraction: float,
-    edge_fraction: float,
     seed: int,
+    edge_fraction: float = DEFAULT_SPARSE_CKA_FRACTION,
     model: EmbeddingModel = EmbeddingModel.ALL_MINILM_L6_V2,
 ) -> SetupResult:
     """Load corpus, embed, and run alignment tests for a single domain pair.
