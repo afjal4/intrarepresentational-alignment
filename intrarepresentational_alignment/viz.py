@@ -354,10 +354,29 @@ def print_significance_summary(
     sparse_results: dict[tuple[str, str], DomainAlignmentResult],
     keys: list[tuple[str, str]] | None = None,
 ) -> None:
-    """Print a per-metric count of significant domain pairs for dense and sparse kernels."""
+    """Print significance counts and CKA-vs-GED overlap for dense and sparse kernels."""
     if keys is None:
         keys = list(dense_results)
     n = len(keys)
+
+    cka_sig = {k for k in keys if dense_results[k].cka.p_value < _SIG_THRESHOLD}
+    ged_sig = {k for k in keys if sparse_results[k].ged.p_value < _SIG_THRESHOLD}
+    overlap = cka_sig & ged_sig
+    ged_new = ged_sig - cka_sig
+    cka_only = cka_sig - ged_sig
+    either = cka_sig | ged_sig
+
+    print(
+        f"CKA identifies significant alignment between {len(cka_sig)} metaphor-domain pairs."
+    )
+    print(
+        f"Sparse GED identifies {len(ged_sig)} significant pairs, "
+        f"{len(overlap)} of which were previously identified by CKA."
+    )
+    print(
+        f"Sparse GED contributes {len(ged_new)} new pairs beyond dense CKA "
+        f"({len(cka_only)} dense-CKA-only; {len(either)} pairs significant by either metric in total)."
+    )
 
     metrics = ("cka", "ged", "wl", "mcs")
     labels  = ("CKA", "GED", "WL", "MCS")

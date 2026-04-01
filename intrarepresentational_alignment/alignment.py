@@ -173,36 +173,70 @@ def cka_permutation_test(
     )
 
 
-def ged(K: np.ndarray, L: np.ndarray, threshold: float = DEFAULT_GED_THRESHOLD) -> float:
-    """Graph Edit Distance between two weighted kernel matrices."""
+def ged(
+    K: np.ndarray,
+    L: np.ndarray,
+    threshold: float = DEFAULT_GED_THRESHOLD,
+    source_threshold: float | None = None,
+    target_threshold: float | None = None,
+) -> float:
+    """Weighted GED between two weighted kernel matrices.
+
+    Applies threshold sparsification first, then compares surviving edge weights:
+
+        K'_ij = K_ij if K_ij > tau_S else 0
+        L'_ij = L_ij if L_ij > tau_T else 0
+        d(K, L) = sum_{i<j} |K'_ij - L'_ij| / sum_{i<j} (K'_ij + L'_ij)
+
+    If source_threshold/target_threshold are not provided, both default to
+    the shared *threshold* value.
+    """
     _validate_square_same_shape(K, L)
     idx = np.triu_indices(K.shape[0], k=1)
     k, l = K[idx], L[idx]
 
-    k_present = k > threshold
-    l_present = l > threshold
+    tau_s = threshold if source_threshold is None else source_threshold
+    tau_t = threshold if target_threshold is None else target_threshold
 
-    both = k_present & l_present
-    cost = np.sum(np.abs(k[both] - l[both]))
-    cost += np.sum(k[k_present & ~l_present])
-    cost += np.sum(l[~k_present & l_present])
+    k_sparse = np.where(k > tau_s, k, 0.0)
+    l_sparse = np.where(l > tau_t, l, 0.0)
 
-    total = np.sum(k[k_present]) + np.sum(l[l_present])
+    cost = np.sum(np.abs(k_sparse - l_sparse))
+    total = np.sum(k_sparse) + np.sum(l_sparse)
     return float(cost / total) if total > 0 else 0.0
 
 
 class _GEDStatistic(_KLStatistic):
-    def __init__(self, threshold: float) -> None:
+    def __init__(
+        self,
+        threshold: float,
+        source_threshold: float | None = None,
+        target_threshold: float | None = None,
+    ) -> None:
         super().__init__()
         self._threshold = threshold
+        self._source_threshold = source_threshold
+        self._target_threshold = target_threshold
 
     def observed(self) -> float:
         K, L = self._require_setup()
-        return ged(K, L, self._threshold)
+        return ged(
+            K,
+            L,
+            self._threshold,
+            source_threshold=self._source_threshold,
+            target_threshold=self._target_threshold,
+        )
 
     def score_permutation(self, pi: np.ndarray) -> float:
         K, L = self._require_setup()
-        return ged(K, L[np.ix_(pi, pi)], self._threshold)
+        return ged(
+            K,
+            L[np.ix_(pi, pi)],
+            self._threshold,
+            source_threshold=self._source_threshold,
+            target_threshold=self._target_threshold,
+        )
 
     def p_value(self, observed: float, null: np.ndarray) -> float:
         return float((null <= observed).mean())
@@ -212,16 +246,25 @@ def ged_permutation_test(
     K: np.ndarray,
     L: np.ndarray,
     threshold: float = DEFAULT_GED_THRESHOLD,
+    source_threshold: float | None = None,
+    target_threshold: float | None = None,
     n_permutations: int = DEFAULT_PERMUTATIONS,
     rng: np.random.Generator | None = None,
 ) -> PermutationTestResult:
-    """Test whether GED(K, L) is significantly below chance."""
+    """Test whether thresholded weighted GED(K, L) is significantly below chance.
+
+    If source_threshold/target_threshold are omitted, both use *threshold*.
+    """
     if rng is None:
         rng = np.random.default_rng()
     return _run_permutation_test(
         K=K,
         L=L,
-        statistic=_GEDStatistic(threshold=threshold),
+        statistic=_GEDStatistic(
+            threshold=threshold,
+            source_threshold=source_threshold,
+            target_threshold=target_threshold,
+        ),
         n_permutations=n_permutations,
         rng=rng,
     )
