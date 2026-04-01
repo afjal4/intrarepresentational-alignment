@@ -8,6 +8,7 @@ import numpy as np
 
 from .alignment import (
     DEFAULT_GED_THRESHOLD,
+    DEFAULT_MCS_THRESHOLD,
     DEFAULT_PERMUTATIONS,
     DEFAULT_WL_ITERATIONS,
     PermutationTestResult,
@@ -69,6 +70,7 @@ def analyse_domain_pairs(
     matrix_strategy: MatrixComputationStrategy | None = None,
     n_permutations: int = DEFAULT_PERMUTATIONS,
     ged_threshold: float = DEFAULT_GED_THRESHOLD,
+    mcs_threshold: float = DEFAULT_MCS_THRESHOLD,
     mcs_edge_fraction: float = DEFAULT_MCS_EDGE_FRACTION,
     wl_n_iter: int = DEFAULT_WL_ITERATIONS,
     rng: np.random.Generator | None = None,
@@ -81,7 +83,7 @@ def analyse_domain_pairs(
     Returns a result for every group in *domain_pairs* that meets the
     *min_pairs* / *max_pairs* size constraints.
 
-    Binary MCS is computed on dense kernels with edges binarized at *ged_threshold*.
+    Binary MCS is computed on dense kernels with edges binarized at *mcs_threshold*.
     This ensures MCS captures the graph structure similarity across the full domain.
     (The *mcs_edge_fraction* parameter is deprecated and no longer used.)
     """
@@ -111,7 +113,7 @@ def analyse_domain_pairs(
             cka=cka_permutation_test(K_S, K_T, n_permutations=n_permutations, rng=rng),
             ged=ged_permutation_test(K_S, K_T, threshold=ged_threshold, n_permutations=n_permutations, rng=rng),
             wl=wl_permutation_test(K_S, K_T, n_iter=wl_n_iter, n_permutations=n_permutations, rng=rng),
-            mcs=mcs_permutation_test(K_S, K_T, threshold=ged_threshold, n_permutations=n_permutations, rng=rng),
+            mcs=mcs_permutation_test(K_S, K_T, threshold=mcs_threshold, n_permutations=n_permutations, rng=rng),
             K_source=K_S if return_kernels else None,
             K_target=K_T if return_kernels else None,
         )
@@ -119,7 +121,7 @@ def analyse_domain_pairs(
     return results
 
 
-_DEFAULT_MCS_FRACTIONS: list[float]   = [0.05, 0.10, 0.15, 0.20, 0.25, 0.30, 0.40, 0.50]
+_DEFAULT_MCS_THRESHOLDS: list[float]  = [0.2, 0.3, 0.4, 0.5, 0.6, 0.7]
 _DEFAULT_WL_ITERS: list[int]          = [1, 2, 3, 4, 5]
 _DEFAULT_GED_THRESHOLDS: list[float]  = [0.0, 0.1, 0.2, 0.3, 0.4]
 _DEFAULT_SCKA_FRACTIONS: list[float]  = [0.05, 0.10, 0.15, 0.20, 0.25, 0.30, 0.40, 0.50]
@@ -159,7 +161,7 @@ def compute_kernel_pairs(
 def sweep_parameters(
     kernels: dict[tuple[str, str], tuple[np.ndarray, np.ndarray]],
     *,
-    mcs_fractions: list[float] | None = None,
+    mcs_thresholds: list[float] | None = None,
     wl_iters: list[int] | None = None,
     ged_thresholds: list[float] | None = None,
     sparse_cka_fractions: list[float] | None = None,
@@ -172,23 +174,22 @@ def sweep_parameters(
     one result per domain pair in *kernels* order.  Pass the output directly to
     viz.plot_parameter_sweep().
     """
-    _mcs_fracs   = mcs_fractions         or _DEFAULT_MCS_FRACTIONS
+    _mcs_threshs = mcs_thresholds        or _DEFAULT_MCS_THRESHOLDS
     _wl_iters    = wl_iters              or _DEFAULT_WL_ITERS
     _ged_threshs = ged_thresholds        or _DEFAULT_GED_THRESHOLDS
     _scka_fracs  = sparse_cka_fractions  or _DEFAULT_SCKA_FRACTIONS
 
     sweep: dict[str, dict] = {
-        "mcs_fraction":       {},
+        "mcs_threshold":      {},
         "wl_n_iter":          {},
         "ged_threshold":      {},
         "sparse_cka_fraction": {},
     }
 
-    for frac in _mcs_fracs:
-        sparsify = TopFraction(frac)
+    for thresh in _mcs_threshs:
         rng = np.random.default_rng(rng_seed)
-        sweep["mcs_fraction"][frac] = [
-            mcs_permutation_test(sparsify(K_S), sparsify(K_T),
+        sweep["mcs_threshold"][thresh] = [
+            mcs_permutation_test(K_S, K_T, threshold=thresh,
                                  n_permutations=n_permutations, rng=rng)
             for K_S, K_T in kernels.values()
         ]
@@ -228,7 +229,8 @@ def setup_domain_analysis(
     *,
     n_perms: int,
     ged_threshold: float,
-    mcs_edge_fraction: float,
+    mcs_threshold: float = DEFAULT_MCS_THRESHOLD,
+    mcs_edge_fraction: float = DEFAULT_MCS_EDGE_FRACTION,
     seed: int,
     edge_fraction: float = DEFAULT_SPARSE_CKA_FRACTION,
     model: EmbeddingModel = EmbeddingModel.ALL_MINILM_L6_V2,
@@ -256,6 +258,7 @@ def setup_domain_analysis(
         {key: pairs}, embedder,
         n_permutations=n_perms,
         ged_threshold=ged_threshold,
+        mcs_threshold=mcs_threshold,
         mcs_edge_fraction=mcs_edge_fraction,
         rng=np.random.default_rng(seed),
         return_kernels=True,
