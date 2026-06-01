@@ -1,5 +1,7 @@
 # intrarepresentational-alignment
 
+An experiment to identify Conceptual Metaphor structure in a distributional semantic embedding space. This is done by modelling "conceptual domains" as representations that can be compared using Representational Alignment Metrics from computational neuroscience, as well as a new metric that uses Graph Distance, which is a natural way to represent metaphor as in Gentner's "Metaphor as a Structure-Mapping".
+
 Dataset:
 https://github.com/lcc-api/metaphor
 Mohler et al. 2016 -- Introducing the LCC Metaphor Datasets
