@@ -44,19 +44,17 @@ def _fetch_relatedness(
     if key in cache:
         return cache[key]
 
-    try:
-        resp = requests.get(
-            _API_URL,
-            params={"node1": _cn_node(word1), "node2": _cn_node(word2)},
-            timeout=15,
-        )
-        score = float(resp.json()["value"]) if resp.ok else 0.0
-    except Exception:
-        score = 0.0
+    resp = requests.get(
+        _API_URL,
+        params={"node1": _cn_node(word1), "node2": _cn_node(word2)},
+        timeout=15,
+    )
+    resp.raise_for_status()
+    score = float(resp.json()["value"])
 
     cache[key] = score
     new_call_count[0] += 1
-    time.sleep(_RATE_LIMIT_DELAY)
+    time.sleep(_RATE_LIMIT_DELAY)  # only throttle on real API hits
 
     if new_call_count[0] % _SAVE_EVERY == 0:
         _save_cache(cache, cache_path)
