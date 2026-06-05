@@ -88,8 +88,6 @@ Without normalization, this is equivalent to the Hamming distance $d_H$ of the a
 
 CKA (continuous geometry) and GED (discrete topology) provide complementary views of domain alignment.
 
-Future work may benefit from exploring alternative graph distance measures, including Weighted GED and Maximum Common Subgraph Distance (MCSD) \citep{Bunke1998MCS}.
-
 ---
 
 ### Randomized Relabeling Test

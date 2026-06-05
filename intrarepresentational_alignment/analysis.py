@@ -8,15 +8,12 @@ import numpy as np
 
 from .alignment import (
     DEFAULT_GED_THRESHOLD,
-    DEFAULT_MCS_THRESHOLD,
     DEFAULT_PERMUTATIONS,
-    DEFAULT_WL_ITERATIONS,
     PermutationTestResult,
     cka_permutation_test,
     ged_permutation_test,
-    mcs_permutation_test,
-    wl_permutation_test,
 )
+from .conceptnet import _DEFAULT_CACHE_PATH, build_conceptnet_kernel
 from .data import LccInstance, load_lcc
 from .embedding import Embedder
 from .embedding_models import EmbeddingModel
@@ -59,7 +56,6 @@ def group_domain_pairs(
     return dict(pairs)
 
 
-DEFAULT_MCS_EDGE_FRACTION: float = 0.2
 DEFAULT_SPARSE_CKA_FRACTION: float = 0.15
 
 
@@ -72,22 +68,15 @@ def analyse_domain_pairs(
     ged_threshold: float = DEFAULT_GED_THRESHOLD,
     ged_source_threshold: float | None = None,
     ged_target_threshold: float | None = None,
-    mcs_threshold: float = DEFAULT_MCS_THRESHOLD,
-    mcs_edge_fraction: float = DEFAULT_MCS_EDGE_FRACTION,
-    wl_n_iter: int = DEFAULT_WL_ITERATIONS,
     rng: np.random.Generator | None = None,
     min_pairs: int = 1,
     max_pairs: int | None = None,
     return_kernels: bool = False,
 ) -> dict[tuple[str, str], DomainAlignmentResult]:
-    """Compute CKA, GED, WL and MCS alignment for each (source_concept, target_concept) group.
+    """Compute CKA and GED alignment for each (source_concept, target_concept) group.
 
     Returns a result for every group in *domain_pairs* that meets the
     *min_pairs* / *max_pairs* size constraints.
-
-    Binary MCS is computed on dense kernels with edges binarized at *mcs_threshold*.
-    This ensures MCS captures the graph structure similarity across the full domain.
-    (The *mcs_edge_fraction* parameter is deprecated and no longer used.)
     """
     if metric is None:
         metric = CosineSimilarity()
@@ -130,8 +119,6 @@ def analyse_domain_pairs(
                 n_permutations=n_permutations,
                 rng=rng,
             ),
-            wl=wl_permutation_test(K_S, K_T, n_iter=wl_n_iter, n_permutations=n_permutations, rng=rng),
-            mcs=mcs_permutation_test(K_S, K_T, threshold=mcs_threshold, n_permutations=n_permutations, rng=rng),
             K_source=K_S if return_kernels else None,
             K_target=K_T if return_kernels else None,
         )
@@ -139,8 +126,6 @@ def analyse_domain_pairs(
     return results
 
 
-_DEFAULT_MCS_THRESHOLDS: list[float]  = [0.2, 0.3, 0.4, 0.5, 0.6, 0.7]
-_DEFAULT_WL_ITERS: list[int]          = [1, 2, 3, 4, 5]
 _DEFAULT_GED_THRESHOLDS: list[float]  = [0.0, 0.1, 0.2, 0.3, 0.4]
 _DEFAULT_SCKA_FRACTIONS: list[float]  = [0.05, 0.10, 0.15, 0.20, 0.25, 0.30, 0.40, 0.50]
 
@@ -179,8 +164,6 @@ def compute_kernel_pairs(
 def sweep_parameters(
     kernels: dict[tuple[str, str], tuple[np.ndarray, np.ndarray]],
     *,
-    mcs_thresholds: list[float] | None = None,
-    wl_iters: list[int] | None = None,
     ged_thresholds: list[float] | None = None,
     sparse_cka_fractions: list[float] | None = None,
     n_permutations: int = DEFAULT_PERMUTATIONS,
@@ -192,33 +175,13 @@ def sweep_parameters(
     one result per domain pair in *kernels* order.  Pass the output directly to
     viz.plot_parameter_sweep().
     """
-    _mcs_threshs = mcs_thresholds        or _DEFAULT_MCS_THRESHOLDS
-    _wl_iters    = wl_iters              or _DEFAULT_WL_ITERS
     _ged_threshs = ged_thresholds        or _DEFAULT_GED_THRESHOLDS
     _scka_fracs  = sparse_cka_fractions  or _DEFAULT_SCKA_FRACTIONS
 
     sweep: dict[str, dict] = {
-        "mcs_threshold":      {},
-        "wl_n_iter":          {},
         "ged_threshold":      {},
         "sparse_cka_fraction": {},
     }
-
-    for thresh in _mcs_threshs:
-        rng = np.random.default_rng(rng_seed)
-        sweep["mcs_threshold"][thresh] = [
-            mcs_permutation_test(K_S, K_T, threshold=thresh,
-                                 n_permutations=n_permutations, rng=rng)
-            for K_S, K_T in kernels.values()
-        ]
-
-    for n_iter in _wl_iters:
-        rng = np.random.default_rng(rng_seed)
-        sweep["wl_n_iter"][n_iter] = [
-            wl_permutation_test(K_S, K_T, n_iter=n_iter,
-                                n_permutations=n_permutations, rng=rng)
-            for K_S, K_T in kernels.values()
-        ]
 
     for thresh in _ged_threshs:
         rng = np.random.default_rng(rng_seed)
@@ -240,6 +203,64 @@ def sweep_parameters(
     return sweep
 
 
+def analyse_domain_pairs_conceptnet(
+    domain_pairs: dict[tuple[str, str], list[tuple[str, str]]],
+    *,
+    n_permutations: int = DEFAULT_PERMUTATIONS,
+    ged_threshold: float = DEFAULT_GED_THRESHOLD,
+    rng: np.random.Generator | None = None,
+    min_pairs: int = 1,
+    max_pairs: int | None = None,
+    cache_path: Path = _DEFAULT_CACHE_PATH,
+    verbose: bool = False,
+) -> dict[tuple[str, str], DomainAlignmentResult]:
+    """Compute CKA and GED alignment using ConceptNet relatedness kernels.
+
+    Bypasses word-embedding entirely: for each domain pair the source and
+    target kernel matrices are built from ConceptNet relatedness scores
+    between every pair of expressions within each domain.  Pairs whose
+    kernels are entirely zero (no ConceptNet coverage) are skipped.
+    """
+    if rng is None:
+        rng = np.random.default_rng()
+
+    results: dict[tuple[str, str], DomainAlignmentResult] = {}
+    for key, pairs in domain_pairs.items():
+        n = len(pairs)
+        if n < min_pairs:
+            continue
+        if max_pairs is not None and n > max_pairs:
+            continue
+
+        src_texts = [s for s, _ in pairs]
+        tgt_texts = [t for _, t in pairs]
+
+        if verbose:
+            print(f"  ConceptNet kernel: {key[0]} -> {key[1]}  (n={n})")
+
+        K_S = build_conceptnet_kernel(src_texts, cache_path=cache_path)
+        K_T = build_conceptnet_kernel(tgt_texts, cache_path=cache_path)
+
+        if K_S.sum() == 0 and K_T.sum() == 0:
+            continue
+
+        results[key] = DomainAlignmentResult(
+            n_pairs=n,
+            cka=cka_permutation_test(K_S, K_T, n_permutations=n_permutations, rng=rng),
+            ged=ged_permutation_test(
+                K_S,
+                K_T,
+                threshold=ged_threshold,
+                n_permutations=n_permutations,
+                rng=rng,
+            ),
+            K_source=K_S,
+            K_target=K_T,
+        )
+
+    return results
+
+
 def setup_domain_analysis(
     lcc_path: Path,
     source_concept: str,
@@ -247,8 +268,6 @@ def setup_domain_analysis(
     *,
     n_perms: int,
     ged_threshold: float,
-    mcs_threshold: float = DEFAULT_MCS_THRESHOLD,
-    mcs_edge_fraction: float = DEFAULT_MCS_EDGE_FRACTION,
     seed: int,
     edge_fraction: float = DEFAULT_SPARSE_CKA_FRACTION,
     model: EmbeddingModel = EmbeddingModel.GLOVE_WIKI_GIGAWORD_300,
@@ -276,8 +295,6 @@ def setup_domain_analysis(
         {key: pairs}, embedder,
         n_permutations=n_perms,
         ged_threshold=ged_threshold,
-        mcs_threshold=mcs_threshold,
-        mcs_edge_fraction=mcs_edge_fraction,
         rng=np.random.default_rng(seed),
         return_kernels=True,
     )[key]

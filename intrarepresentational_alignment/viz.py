@@ -24,7 +24,7 @@ _SIG_THRESHOLD = 0.05
 def _is_significant(result: DomainAlignmentResult) -> bool:
     return any(
         getattr(result, attr).p_value < _SIG_THRESHOLD
-        for attr in ("cka", "ged", "wl", "mcs")
+        for attr in ("cka", "ged")
     )
 
 
@@ -235,18 +235,12 @@ def plot_null_distributions(
     ged_res: PermutationTestResult,
     source_concept: str,
     target_concept: str,
-    wl_res: PermutationTestResult | None = None,
-    mcs_res: PermutationTestResult | None = None,
 ) -> None:
-    """Permutation null distribution histograms for CKA, GED, and optionally WL and MCS."""
+    """Permutation null distribution histograms for CKA and GED."""
     metrics = [
         (cka_res, "#3498db", "CKA  (higher = more similar)"),
         (ged_res, "#e67e22", "GED  (lower = more similar)"),
     ]
-    if wl_res is not None:
-        metrics.append((wl_res, "#2ecc71", "WL distance  (lower = more similar)"))
-    if mcs_res is not None:
-        metrics.append((mcs_res, "#9b59b6", "MCS distance  (lower = more similar)"))
 
     n = len(metrics)
     fig, axes = plt.subplots(1, n, figsize=(7 * n, 5))
@@ -272,12 +266,10 @@ def print_domain_summary(
     source_concept: str,
     target_concept: str,
 ) -> None:
-    """Print CKA/GED/WL/MCS observed values and p-values for a single domain pair."""
+    """Print CKA/GED observed values and p-values for a single domain pair."""
     print(f"{source_concept} -> {target_concept}: {result.n_pairs} expression pairs")
     print(f"CKA = {result.cka.observed:.3f}  (p = {result.cka.p_value:.3f})")
     print(f"GED = {result.ged.observed:.3f}  (p = {result.ged.p_value:.3f})")
-    print(f"WL  = {result.wl.observed:.3f}  (p = {result.wl.p_value:.3f})")
-    print(f"MCS = {result.mcs.observed:.3f}  (p = {result.mcs.p_value:.3f})")
 
 
 def print_cka_table(
@@ -301,13 +293,13 @@ def print_alignment_table(
     domain_results: dict[tuple[str, str], DomainAlignmentResult],
     keys: list[tuple[str, str]] | None = None,
 ) -> None:
-    """Print a CKA/GED/WL/MCS comparison table for the given domain pairs."""
+    """Print a CKA/GED comparison table for the given domain pairs."""
     if keys is None:
         keys = list(domain_results)
     header = (
         f"{'Source domain':<28} {'Target domain':<22} "
-        f"{'CKA':>6}  {'GED':>6}  {'WL':>6}  {'MCS':>6}  "
-        f"{'p(CKA)':>7}  {'p(GED)':>7}  {'p(WL)':>6}  {'p(MCS)':>7}"
+        f"{'CKA':>6}  {'GED':>6}  "
+        f"{'p(CKA)':>7}  {'p(GED)':>7}"
     )
     print(header)
     print("-" * len(header))
@@ -317,11 +309,8 @@ def print_alignment_table(
         print(
             f"{src:<28} {tgt:<22} "
             f"{r.cka.observed:>6.3f}  {r.ged.observed:>6.3f}  "
-            f"{r.wl.observed:>6.3f}  {r.mcs.observed:>6.3f}  "
             f"{r.cka.p_value:>6.3f}{'*' if r.cka.p_value < _SIG_THRESHOLD else ' '}  "
-            f"{r.ged.p_value:>6.3f}{'*' if r.ged.p_value < _SIG_THRESHOLD else ' '}  "
-            f"{r.wl.p_value:>5.3f}{'*' if r.wl.p_value < _SIG_THRESHOLD else ' '}  "
-            f"{r.mcs.p_value:>6.3f}{'*' if r.mcs.p_value < _SIG_THRESHOLD else ' '}"
+            f"{r.ged.p_value:>6.3f}{'*' if r.ged.p_value < _SIG_THRESHOLD else ' '}"
         )
 
 
@@ -340,8 +329,7 @@ def print_summary_table(
     )
     header = (
         f"{'Source domain':<22}  {'Target domain':<22}  {'n':>4}  "
-        f"{'CKA':>6}  {'p(CKA)':>7}  {'GED':>6}  {'p(GED)':>7}  "
-        f"{'WL':>6}  {'p(WL)':>6}  {'MCS':>6}  {'p(MCS)':>7}"
+        f"{'CKA':>6}  {'p(CKA)':>7}  {'GED':>6}  {'p(GED)':>7}"
     )
     sep = "-" * len(header)
     print(header)
@@ -352,9 +340,7 @@ def print_summary_table(
         print(
             f"{src:<22}  {tgt:<22}  {r.n_pairs:>4}  "
             f"{r.cka.observed:>6.3f}  {r.cka.p_value:>6.3f}{'*' if r.cka.p_value < _SIG_THRESHOLD else ' '}  "
-            f"{r.ged.observed:>6.3f}  {r.ged.p_value:>6.3f}{'*' if r.ged.p_value < _SIG_THRESHOLD else ' '}  "
-            f"{r.wl.observed:>6.3f}  {r.wl.p_value:>5.3f}{'*' if r.wl.p_value < _SIG_THRESHOLD else ' '}  "
-            f"{r.mcs.observed:>6.3f}  {r.mcs.p_value:>6.3f}{'*' if r.mcs.p_value < _SIG_THRESHOLD else ' '}"
+            f"{r.ged.observed:>6.3f}  {r.ged.p_value:>6.3f}{'*' if r.ged.p_value < _SIG_THRESHOLD else ' '}"
         )
     print(sep)
     print(f"  {len(interesting)} of {len(keys)} domain pairs significant at p < 0.05")
@@ -392,8 +378,8 @@ def print_significance_summary(
         for src, tgt in sorted(ged_new):
             print(f"  GED-only: {src} -> {tgt}")
 
-    metrics = ("cka", "ged", "wl", "mcs")
-    labels  = ("CKA", "GED", "WL", "MCS")
+    metrics = ("cka", "ged")
+    labels  = ("CKA", "GED")
 
     def _sig_count(results: dict, metric: str) -> int:
         return sum(1 for k in keys if getattr(results[k], metric).p_value < _SIG_THRESHOLD)
@@ -424,7 +410,7 @@ def plot_model_comparison_heatmap(
 
     Cells are hatched where the result is significant (p < 0.05).
     Use metric='cka' for similarity metrics (higher = more similar) or
-    'ged'/'wl'/'mcs' for distance metrics (lower = more similar).
+    'ged' for distance metrics (lower = more similar).
     """
     model_labels = list(model_results.keys())
     all_keys: set[tuple[str, str]] = set()
@@ -432,7 +418,7 @@ def plot_model_comparison_heatmap(
         all_keys.update(res.keys())
 
     # Sort rows by mean observed value across models (desc for similarity, asc for distance)
-    distance_metrics = {"ged", "wl", "mcs"}
+    distance_metrics = {"ged"}
     def _row_mean(key: tuple[str, str]) -> float:
         vals = [
             getattr(model_results[m][key], metric).observed
@@ -496,9 +482,9 @@ def plot_model_comparison_significance(
 ) -> None:
     """Grouped bar chart: # significant domain pairs per model, broken down by metric."""
     model_labels = list(model_results.keys())
-    metrics  = ("cka", "ged", "wl", "mcs")
-    labels   = ("CKA", "GED", "WL", "MCS")
-    colors   = ("#3498db", "#e67e22", "#2ecc71", "#9b59b6")
+    metrics  = ("cka", "ged")
+    labels   = ("CKA", "GED")
+    colors   = ("#3498db", "#e67e22")
 
     counts = np.zeros((len(model_labels), len(metrics)), dtype=int)
     for j, label in enumerate(model_labels):
@@ -528,6 +514,133 @@ def plot_model_comparison_significance(
     ax.set_title("Significant alignment detections per embedding model and metric", fontsize=11)
     ax.legend(fontsize=9)
     ax.set_ylim(bottom=0)
+    plt.tight_layout()
+    if save_path is not None:
+        fig.savefig(save_path, bbox_inches="tight", dpi=150)
+    plt.show()
+
+
+def _method_sig_sets(
+    model_results: dict[tuple[str, str], DomainAlignmentResult],
+    cn_results: dict[tuple[str, str], DomainAlignmentResult],
+    keys: list[tuple[str, str]],
+) -> dict[str, set[tuple[str, str]]]:
+    """Return significant-pair sets for each of the four detection methods."""
+    return {
+        "CKA (embed)": {k for k in keys if k in model_results and model_results[k].cka.p_value < _SIG_THRESHOLD},
+        "GED (embed)": {k for k in keys if k in model_results and model_results[k].ged.p_value < _SIG_THRESHOLD},
+        "CKA (CN)":    {k for k in keys if k in cn_results    and cn_results[k].cka.p_value    < _SIG_THRESHOLD},
+        "GED (CN)":    {k for k in keys if k in cn_results    and cn_results[k].ged.p_value    < _SIG_THRESHOLD},
+    }
+
+
+def print_method_detection_table(
+    all_model_results: dict[str, dict[tuple[str, str], DomainAlignmentResult]],
+    cn_key: str = "conceptnet",
+    keys: list[tuple[str, str]] | None = None,
+) -> None:
+    """Print a table: rows = embedding models, cols = detection methods.
+
+    Each cell shows ``N (U)`` where N is the number of significant pairs
+    and U is the number of pairs detected *only* by that method (not by
+    any of the other three methods for the same model).
+    """
+    cn_results = all_model_results.get(cn_key, {})
+    model_keys = [k for k in all_model_results if k != cn_key]
+    methods = ["CKA (embed)", "GED (embed)", "CKA (CN)", "GED (CN)"]
+
+    if keys is None:
+        all_keys: set[tuple[str, str]] = set()
+        for res in all_model_results.values():
+            all_keys.update(res.keys())
+        keys = sorted(all_keys)
+
+    n_total = len(keys)
+
+    col_w = 14
+    header = f"{'Model':<16}" + "".join(f"{m:>{col_w}}" for m in methods)
+    print(header)
+    print("-" * len(header))
+
+    for model in model_keys:
+        model_res = all_model_results[model]
+        sig = _method_sig_sets(model_res, cn_results, keys)
+        row = f"{model:<16}"
+        for m in methods:
+            n_sig = len(sig[m])
+            other = set().union(*(sig[o] for o in methods if o != m))
+            n_only = len(sig[m] - other)
+            cell = f"{n_sig} ({n_only})"
+            row += f"{cell:>{col_w}}"
+        print(row)
+
+    print("-" * len(header))
+    print(f"  N = significant at p < 0.05  |  (U) = unique to that method  |  total pairs = {n_total}")
+
+
+def plot_method_detection_table(
+    all_model_results: dict[str, dict[tuple[str, str], DomainAlignmentResult]],
+    cn_key: str = "conceptnet",
+    keys: list[tuple[str, str]] | None = None,
+    save_path: Path | None = None,
+) -> None:
+    """Matplotlib table: rows = embedding models, cols = detection methods.
+
+    Each cell shows ``N\\n(U)`` where N = significant pairs and
+    U = pairs unique to that method for that model.
+    """
+    cn_results = all_model_results.get(cn_key, {})
+    model_keys = [k for k in all_model_results if k != cn_key]
+    methods = ["CKA\n(embed)", "GED\n(embed)", "CKA\n(CN)", "GED\n(CN)"]
+    method_keys = ["CKA (embed)", "GED (embed)", "CKA (CN)", "GED (CN)"]
+
+    if keys is None:
+        all_keys: set[tuple[str, str]] = set()
+        for res in all_model_results.values():
+            all_keys.update(res.keys())
+        keys = sorted(all_keys)
+
+    n_total = len(keys)
+    cell_data: list[list[str]] = []
+    cell_colors: list[list[str]] = []
+
+    palette = ["#d6eaf8", "#d5f5e3", "#fdebd0", "#f9ebea"]
+
+    for model in model_keys:
+        model_res = all_model_results[model]
+        sig = _method_sig_sets(model_res, cn_results, keys)
+        row_vals, row_colors = [], []
+        for mi, mk in enumerate(method_keys):
+            n_sig = len(sig[mk])
+            other = set().union(*(sig[o] for o in method_keys if o != mk))
+            n_only = len(sig[mk] - other)
+            row_vals.append(f"{n_sig}\n({n_only})")
+            alpha = max(0.15, min(0.9, n_sig / max(n_total, 1)))
+            row_colors.append(palette[mi % len(palette)])
+        cell_data.append(row_vals)
+        cell_colors.append(row_colors)
+
+    fig, ax = plt.subplots(figsize=(max(8, 2.5 * len(methods)), max(3, 0.7 * len(model_keys) + 1.5)))
+    ax.axis("off")
+
+    tbl = ax.table(
+        cellText=cell_data,
+        rowLabels=model_keys,
+        colLabels=methods,
+        cellColours=cell_colors,
+        loc="center",
+        cellLoc="center",
+    )
+    tbl.auto_set_font_size(False)
+    tbl.set_fontsize(10)
+    tbl.scale(1, 2.2)
+
+    ax.set_title(
+        f"Significant metaphor detections per model × method\n"
+        f"N = # significant pairs  (U) = unique to that method  |  total = {n_total} pairs",
+        fontsize=11,
+        pad=14,
+    )
     plt.tight_layout()
     if save_path is not None:
         fig.savefig(save_path, bbox_inches="tight", dpi=150)
