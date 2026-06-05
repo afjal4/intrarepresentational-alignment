@@ -107,6 +107,14 @@ def analyse_domain_pairs(
 
         S = embedder.embed(src_texts)
         T = embedder.embed(tgt_texts)
+
+        valid = (np.linalg.norm(S, axis=1) > 0) & (np.linalg.norm(T, axis=1) > 0)
+        if valid.sum() < min_pairs:
+            continue
+        if valid.sum() < n:
+            S, T = S[valid], T[valid]
+            n = int(valid.sum())
+
         K_S = compute_similarity_matrix(metric, S, strategy=matrix_strategy)
         K_T = compute_similarity_matrix(metric, T, strategy=matrix_strategy)
 
@@ -243,7 +251,7 @@ def setup_domain_analysis(
     mcs_edge_fraction: float = DEFAULT_MCS_EDGE_FRACTION,
     seed: int,
     edge_fraction: float = DEFAULT_SPARSE_CKA_FRACTION,
-    model: EmbeddingModel = EmbeddingModel.ALL_MINILM_L6_V2,
+    model: EmbeddingModel = EmbeddingModel.GLOVE_WIKI_GIGAWORD_300,
 ) -> SetupResult:
     """Load corpus, embed, and run alignment tests for a single domain pair.
 

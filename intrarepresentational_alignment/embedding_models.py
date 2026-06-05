@@ -2,27 +2,13 @@ from enum import StrEnum
 
 
 class EmbeddingModel(StrEnum):
-    # Sentence-Transformers family
-    ALL_MINILM_L6_V2        = "sentence-transformers/all-MiniLM-L6-v2"
-    ALL_MINILM_L12_V2       = "sentence-transformers/all-MiniLM-L12-v2"
-    ALL_MPNET_BASE_V2       = "sentence-transformers/all-mpnet-base-v2"
-    PARAPHRASE_MULTILINGUAL = "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
+    # word2vec (Google News)
+    WORD2VEC_GOOGLE_NEWS_300     = "word2vec-google-news-300"
 
-    # BAAI/bge family
-    BGE_SMALL_EN            = "BAAI/bge-small-en-v1.5"
-    BGE_BASE_EN             = "BAAI/bge-base-en-v1.5"
-    BGE_LARGE_EN            = "BAAI/bge-large-en-v1.5"
-    BGE_M3                  = "BAAI/bge-m3"
+    # GloVe (Wikipedia + Gigaword)
+    GLOVE_WIKI_GIGAWORD_50       = "glove-wiki-gigaword-50"
+    GLOVE_WIKI_GIGAWORD_100      = "glove-wiki-gigaword-100"
+    GLOVE_WIKI_GIGAWORD_300      = "glove-wiki-gigaword-300"
 
-    # intfloat/e5 family
-    E5_SMALL_V2             = "intfloat/e5-small-v2"
-    E5_BASE_V2              = "intfloat/e5-base-v2"
-    E5_LARGE_V2             = "intfloat/e5-large-v2"
-    E5_MISTRAL_7B           = "intfloat/e5-mistral-7b-instruct"
-
-    # GTE family
-    GTE_SMALL               = "thenlper/gte-small"
-    GTE_LARGE               = "thenlper/gte-large"
-
-    # Nomic
-    NOMIC_EMBED_TEXT_V1     = "nomic-ai/nomic-embed-text-v1"
+    # FastText (Wikipedia news, with subword)
+    FASTTEXT_WIKI_NEWS_300       = "fasttext-wiki-news-subwords-300"

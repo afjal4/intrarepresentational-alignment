@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from pathlib import Path
+
 import matplotlib.patches as mpatches
 import matplotlib.pyplot as plt
 import networkx as nx
@@ -28,6 +30,7 @@ def _is_significant(result: DomainAlignmentResult) -> bool:
 
 def plot_cka_bar(
     domain_results: dict[tuple[str, str], DomainAlignmentResult],
+    save_path: Path | None = None,
 ) -> None:
     """Horizontal bar chart of CKA scores, coloured by significance."""
     keys   = sorted(domain_results, key=lambda k: domain_results[k].cka.observed, reverse=True)
@@ -56,11 +59,14 @@ def plot_cka_bar(
         fontsize=9,
     )
     plt.tight_layout()
+    if save_path is not None:
+        fig.savefig(save_path, bbox_inches="tight", dpi=150)
     plt.show()
 
 
 def plot_ged_vs_cka(
     domain_results: dict[tuple[str, str], DomainAlignmentResult],
+    save_path: Path | None = None,
 ) -> None:
     """Side-by-side horizontal bar charts comparing GED and CKA scores."""
     keys       = sorted(domain_results, key=lambda k: domain_results[k].ged.observed)
@@ -87,6 +93,8 @@ def plot_ged_vs_cka(
 
     fig.suptitle("GED vs CKA \u2014 source\u2013target domain alignment", fontsize=11)
     plt.tight_layout()
+    if save_path is not None:
+        fig.savefig(save_path, bbox_inches="tight", dpi=150)
     plt.show()
 
 
@@ -94,6 +102,7 @@ def plot_dense_vs_sparse(
     dense_results: dict[tuple[str, str], DomainAlignmentResult],
     sparse_results: dict[tuple[str, str], DomainAlignmentResult],
     edge_fraction: float,
+    save_path: Path | None = None,
 ) -> None:
     """Paired horizontal bars comparing dense and sparse CKA scores."""
     keys          = sorted(dense_results, key=lambda k: dense_results[k].cka.observed, reverse=True)
@@ -121,6 +130,8 @@ def plot_dense_vs_sparse(
     ax.set_xlim(left=0)
     ax.legend(fontsize=9)
     plt.tight_layout()
+    if save_path is not None:
+        fig.savefig(save_path, bbox_inches="tight", dpi=150)
     plt.show()
 
 
@@ -402,6 +413,125 @@ def print_significance_summary(
         print(f"{label:<8}  {dc:>{col}} / {n}  {sc:>{col}} / {n}")
     print(sep)
     print(f"{'Any':<8}  {dense_any:>{col}} / {n}  {sparse_any:>{col}} / {n}")
+
+
+def plot_model_comparison_heatmap(
+    model_results: dict[str, dict[tuple[str, str], DomainAlignmentResult]],
+    metric: str = "cka",
+    save_path: Path | None = None,
+) -> None:
+    """Heatmap of alignment scores per domain pair (rows) × model (columns).
+
+    Cells are hatched where the result is significant (p < 0.05).
+    Use metric='cka' for similarity metrics (higher = more similar) or
+    'ged'/'wl'/'mcs' for distance metrics (lower = more similar).
+    """
+    model_labels = list(model_results.keys())
+    all_keys: set[tuple[str, str]] = set()
+    for res in model_results.values():
+        all_keys.update(res.keys())
+
+    # Sort rows by mean observed value across models (desc for similarity, asc for distance)
+    distance_metrics = {"ged", "wl", "mcs"}
+    def _row_mean(key: tuple[str, str]) -> float:
+        vals = [
+            getattr(model_results[m][key], metric).observed
+            for m in model_labels
+            if key in model_results[m]
+        ]
+        return float(np.mean(vals)) if vals else 0.0
+
+    reverse = metric not in distance_metrics
+    row_keys = sorted(all_keys, key=_row_mean, reverse=reverse)
+
+    n_rows = len(row_keys)
+    n_cols = len(model_labels)
+    data = np.full((n_rows, n_cols), np.nan)
+    sig = np.zeros((n_rows, n_cols), dtype=bool)
+
+    for j, label in enumerate(model_labels):
+        res = model_results[label]
+        for i, key in enumerate(row_keys):
+            if key in res:
+                r = getattr(res[key], metric)
+                data[i, j] = r.observed
+                sig[i, j] = r.p_value < _SIG_THRESHOLD
+
+    cmap = "viridis_r" if metric in distance_metrics else "viridis"
+    fig, ax = plt.subplots(figsize=(max(8, 2.5 * n_cols), max(6, 0.35 * n_rows + 2)))
+    im = ax.imshow(data, aspect="auto", cmap=cmap, interpolation="nearest")
+    plt.colorbar(im, ax=ax, fraction=0.03, pad=0.02, label=metric.upper())
+
+    # Hatch significant cells
+    for i in range(n_rows):
+        for j in range(n_cols):
+            if sig[i, j]:
+                ax.add_patch(plt.Rectangle(
+                    (j - 0.5, i - 0.5), 1, 1,
+                    fill=False, hatch="//", edgecolor="white", linewidth=0,
+                ))
+            if not np.isnan(data[i, j]):
+                ax.text(j, i, f"{data[i, j]:.2f}", ha="center", va="center",
+                        fontsize=7, color="white" if data[i, j] < np.nanmax(data) * 0.6 else "#111")
+
+    ax.set_xticks(range(n_cols))
+    ax.set_xticklabels(model_labels, rotation=25, ha="right", fontsize=9)
+    ax.set_yticks(range(n_rows))
+    ax.set_yticklabels([f"{s}  →  {t}" for s, t in row_keys], fontsize=7)
+    direction = "lower = more similar" if metric in distance_metrics else "higher = more similar"
+    ax.set_title(
+        f"{metric.upper()} per domain pair × embedding model  ({direction})\n"
+        f"hatched = p < 0.05",
+        fontsize=11,
+    )
+    plt.tight_layout()
+    if save_path is not None:
+        fig.savefig(save_path, bbox_inches="tight", dpi=150)
+    plt.show()
+
+
+def plot_model_comparison_significance(
+    model_results: dict[str, dict[tuple[str, str], DomainAlignmentResult]],
+    save_path: Path | None = None,
+) -> None:
+    """Grouped bar chart: # significant domain pairs per model, broken down by metric."""
+    model_labels = list(model_results.keys())
+    metrics  = ("cka", "ged", "wl", "mcs")
+    labels   = ("CKA", "GED", "WL", "MCS")
+    colors   = ("#3498db", "#e67e22", "#2ecc71", "#9b59b6")
+
+    counts = np.zeros((len(model_labels), len(metrics)), dtype=int)
+    for j, label in enumerate(model_labels):
+        res = model_results[label]
+        for i, m in enumerate(metrics):
+            counts[j, i] = sum(
+                1 for r in res.values()
+                if getattr(r, m).p_value < _SIG_THRESHOLD
+            )
+
+    x = np.arange(len(model_labels))
+    n_metrics = len(metrics)
+    w = 0.18
+    offsets = np.linspace(-(n_metrics - 1) / 2, (n_metrics - 1) / 2, n_metrics) * w
+
+    fig, ax = plt.subplots(figsize=(max(8, 1.8 * len(model_labels)), 5))
+    for i, (label, color, offset) in enumerate(zip(labels, colors, offsets)):
+        bars = ax.bar(x + offset, counts[:, i], w, label=label, color=color, alpha=0.85, edgecolor="white")
+        for bar, val in zip(bars, counts[:, i]):
+            if val > 0:
+                ax.text(bar.get_x() + bar.get_width() / 2, bar.get_height() + 0.05,
+                        str(val), ha="center", va="bottom", fontsize=8)
+
+    ax.set_xticks(x)
+    ax.set_xticklabels(model_labels, fontsize=9)
+    ax.set_ylabel("# significant domain pairs (p < 0.05)", fontsize=10)
+    ax.set_title("Significant alignment detections per embedding model and metric", fontsize=11)
+    ax.legend(fontsize=9)
+    ax.set_ylim(bottom=0)
+    plt.tight_layout()
+    if save_path is not None:
+        fig.savefig(save_path, bbox_inches="tight", dpi=150)
+    plt.show()
 
 
 def print_dense_vs_sparse_table(
