@@ -377,6 +377,9 @@ def print_significance_summary(
         f"Sparse GED contributes {len(ged_new)} new pairs beyond dense CKA "
         f"({len(cka_only)} dense-CKA-only; {len(either)} pairs significant by either metric in total)."
     )
+    if ged_new:
+        for src, tgt in sorted(ged_new):
+            print(f"  GED-only: {src} -> {tgt}")
 
     metrics = ("cka", "ged", "wl", "mcs")
     labels  = ("CKA", "GED", "WL", "MCS")
