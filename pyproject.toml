@@ -16,6 +16,7 @@ dependencies = [
     "ipywidgets>=8.0,<9",
     "matplotlib>=3.8,<4",
     "networkx>=3.2,<4",
+    "nbconvert>=7.0,<8",
 ]
 
 [project.optional-dependencies]
