@@ -13,7 +13,6 @@ from .alignment import (
     cka_permutation_test,
     ged_permutation_test,
 )
-from .conceptnet import _DEFAULT_CACHE_PATH, build_conceptnet_kernel
 from .data import LccInstance, load_lcc
 from .embedding import Embedder
 from .embedding_models import EmbeddingModel
@@ -201,64 +200,6 @@ def sweep_parameters(
         ]
 
     return sweep
-
-
-def analyse_domain_pairs_conceptnet(
-    domain_pairs: dict[tuple[str, str], list[tuple[str, str]]],
-    *,
-    n_permutations: int = DEFAULT_PERMUTATIONS,
-    ged_threshold: float = DEFAULT_GED_THRESHOLD,
-    rng: np.random.Generator | None = None,
-    min_pairs: int = 1,
-    max_pairs: int | None = None,
-    cache_path: Path = _DEFAULT_CACHE_PATH,
-    verbose: bool = False,
-) -> dict[tuple[str, str], DomainAlignmentResult]:
-    """Compute CKA and GED alignment using ConceptNet relatedness kernels.
-
-    Bypasses word-embedding entirely: for each domain pair the source and
-    target kernel matrices are built from ConceptNet relatedness scores
-    between every pair of expressions within each domain.  Pairs whose
-    kernels are entirely zero (no ConceptNet coverage) are skipped.
-    """
-    if rng is None:
-        rng = np.random.default_rng()
-
-    results: dict[tuple[str, str], DomainAlignmentResult] = {}
-    for key, pairs in domain_pairs.items():
-        n = len(pairs)
-        if n < min_pairs:
-            continue
-        if max_pairs is not None and n > max_pairs:
-            continue
-
-        src_texts = [s for s, _ in pairs]
-        tgt_texts = [t for _, t in pairs]
-
-        if verbose:
-            print(f"  ConceptNet kernel: {key[0]} -> {key[1]}  (n={n})")
-
-        K_S = build_conceptnet_kernel(src_texts, cache_path=cache_path)
-        K_T = build_conceptnet_kernel(tgt_texts, cache_path=cache_path)
-
-        if K_S.sum() == 0 and K_T.sum() == 0:
-            continue
-
-        results[key] = DomainAlignmentResult(
-            n_pairs=n,
-            cka=cka_permutation_test(K_S, K_T, n_permutations=n_permutations, rng=rng),
-            ged=ged_permutation_test(
-                K_S,
-                K_T,
-                threshold=ged_threshold,
-                n_permutations=n_permutations,
-                rng=rng,
-            ),
-            K_source=K_S,
-            K_target=K_T,
-        )
-
-    return results
 
 
 def setup_domain_analysis(

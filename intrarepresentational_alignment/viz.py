@@ -520,35 +520,16 @@ def plot_model_comparison_significance(
     plt.show()
 
 
-def _method_sig_sets(
-    model_results: dict[tuple[str, str], DomainAlignmentResult],
-    cn_results: dict[tuple[str, str], DomainAlignmentResult],
-    keys: list[tuple[str, str]],
-) -> dict[str, set[tuple[str, str]]]:
-    """Return significant-pair sets for each of the four detection methods."""
-    return {
-        "CKA (embed)": {k for k in keys if k in model_results and model_results[k].cka.p_value < _SIG_THRESHOLD},
-        "GED (embed)": {k for k in keys if k in model_results and model_results[k].ged.p_value < _SIG_THRESHOLD},
-        "CKA (CN)":    {k for k in keys if k in cn_results    and cn_results[k].cka.p_value    < _SIG_THRESHOLD},
-        "GED (CN)":    {k for k in keys if k in cn_results    and cn_results[k].ged.p_value    < _SIG_THRESHOLD},
-    }
-
-
 def print_method_detection_table(
     all_model_results: dict[str, dict[tuple[str, str], DomainAlignmentResult]],
-    cn_key: str = "conceptnet",
     keys: list[tuple[str, str]] | None = None,
 ) -> None:
-    """Print a table: rows = embedding models, cols = detection methods.
+    """Print a table: rows = embedding models, cols = CKA / GED.
 
     Each cell shows ``N (U)`` where N is the number of significant pairs
-    and U is the number of pairs detected *only* by that method (not by
-    any of the other three methods for the same model).
+    and U is the number of pairs detected only by that metric and not the
+    other (for the same model row).
     """
-    cn_results = all_model_results.get(cn_key, {})
-    model_keys = [k for k in all_model_results if k != cn_key]
-    methods = ["CKA (embed)", "GED (embed)", "CKA (CN)", "GED (CN)"]
-
     if keys is None:
         all_keys: set[tuple[str, str]] = set()
         for res in all_model_results.values():
@@ -556,44 +537,35 @@ def print_method_detection_table(
         keys = sorted(all_keys)
 
     n_total = len(keys)
-
-    col_w = 14
-    header = f"{'Model':<16}" + "".join(f"{m:>{col_w}}" for m in methods)
+    methods = ["CKA", "GED"]
+    col_w = 12
+    header = f"{'Model':<18}" + "".join(f"{m:>{col_w}}" for m in methods)
     print(header)
     print("-" * len(header))
 
-    for model in model_keys:
-        model_res = all_model_results[model]
-        sig = _method_sig_sets(model_res, cn_results, keys)
-        row = f"{model:<16}"
-        for m in methods:
-            n_sig = len(sig[m])
-            other = set().union(*(sig[o] for o in methods if o != m))
-            n_only = len(sig[m] - other)
-            cell = f"{n_sig} ({n_only})"
+    for model, res in all_model_results.items():
+        cka_sig = {k for k in keys if k in res and res[k].cka.p_value < _SIG_THRESHOLD}
+        ged_sig = {k for k in keys if k in res and res[k].ged.p_value < _SIG_THRESHOLD}
+        row = f"{model:<18}"
+        for sig, other in [(cka_sig, ged_sig), (ged_sig, cka_sig)]:
+            cell = f"{len(sig)} ({len(sig - other)})"
             row += f"{cell:>{col_w}}"
         print(row)
 
     print("-" * len(header))
-    print(f"  N = significant at p < 0.05  |  (U) = unique to that method  |  total pairs = {n_total}")
+    print(f"  N = significant at p < 0.05  |  (U) = unique to that metric  |  total pairs = {n_total}")
 
 
 def plot_method_detection_table(
     all_model_results: dict[str, dict[tuple[str, str], DomainAlignmentResult]],
-    cn_key: str = "conceptnet",
     keys: list[tuple[str, str]] | None = None,
     save_path: Path | None = None,
 ) -> None:
-    """Matplotlib table: rows = embedding models, cols = detection methods.
+    """Matplotlib table: rows = embedding models, cols = CKA / GED.
 
     Each cell shows ``N\\n(U)`` where N = significant pairs and
-    U = pairs unique to that method for that model.
+    U = pairs unique to that metric for that model.
     """
-    cn_results = all_model_results.get(cn_key, {})
-    model_keys = [k for k in all_model_results if k != cn_key]
-    methods = ["CKA\n(embed)", "GED\n(embed)", "CKA\n(CN)", "GED\n(CN)"]
-    method_keys = ["CKA (embed)", "GED (embed)", "CKA (CN)", "GED (CN)"]
-
     if keys is None:
         all_keys: set[tuple[str, str]] = set()
         for res in all_model_results.values():
@@ -601,26 +573,25 @@ def plot_method_detection_table(
         keys = sorted(all_keys)
 
     n_total = len(keys)
+    model_keys = list(all_model_results.keys())
+    methods = ["CKA", "GED"]
+    palette = ["#d6eaf8", "#d5f5e3"]
+
     cell_data: list[list[str]] = []
     cell_colors: list[list[str]] = []
 
-    palette = ["#d6eaf8", "#d5f5e3", "#fdebd0", "#f9ebea"]
-
     for model in model_keys:
-        model_res = all_model_results[model]
-        sig = _method_sig_sets(model_res, cn_results, keys)
+        res = all_model_results[model]
+        cka_sig = {k for k in keys if k in res and res[k].cka.p_value < _SIG_THRESHOLD}
+        ged_sig = {k for k in keys if k in res and res[k].ged.p_value < _SIG_THRESHOLD}
         row_vals, row_colors = [], []
-        for mi, mk in enumerate(method_keys):
-            n_sig = len(sig[mk])
-            other = set().union(*(sig[o] for o in method_keys if o != mk))
-            n_only = len(sig[mk] - other)
-            row_vals.append(f"{n_sig}\n({n_only})")
-            alpha = max(0.15, min(0.9, n_sig / max(n_total, 1)))
-            row_colors.append(palette[mi % len(palette)])
+        for sig, other, color in [(cka_sig, ged_sig, palette[0]), (ged_sig, cka_sig, palette[1])]:
+            row_vals.append(f"{len(sig)}\n({len(sig - other)})")
+            row_colors.append(color)
         cell_data.append(row_vals)
         cell_colors.append(row_colors)
 
-    fig, ax = plt.subplots(figsize=(max(8, 2.5 * len(methods)), max(3, 0.7 * len(model_keys) + 1.5)))
+    fig, ax = plt.subplots(figsize=(6, max(3, 0.7 * len(model_keys) + 1.5)))
     ax.axis("off")
 
     tbl = ax.table(
@@ -636,8 +607,8 @@ def plot_method_detection_table(
     tbl.scale(1, 2.2)
 
     ax.set_title(
-        f"Significant metaphor detections per model × method\n"
-        f"N = # significant pairs  (U) = unique to that method  |  total = {n_total} pairs",
+        f"Significant metaphor detections per model × metric\n"
+        f"N = # significant pairs  (U) = unique to that metric  |  total = {n_total} pairs",
         fontsize=11,
         pad=14,
     )
