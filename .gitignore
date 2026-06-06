@@ -5,3 +5,7 @@ venv/
 # AI
 CLAUDE.md
 .claude/
+
+# Large model files
+data/numberbatch*.gz
+data/numberbatch*.txt

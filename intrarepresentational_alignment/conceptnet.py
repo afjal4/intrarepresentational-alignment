@@ -14,6 +14,24 @@ _SAVE_EVERY = 50
 _API_URL = "https://api.conceptnet.io/relatedness"
 _MIRROR_BASE = "https://cstr-conceptnet-normalized.hf.space/gradio_api/call/run_raw_query"
 
+_STOPWORDS = frozenset({
+    "a", "an", "the", "and", "or", "but", "not", "so", "yet", "nor",
+    "as", "if", "of", "in", "on", "at", "to", "for", "with", "by",
+    "from", "is", "are", "was", "were", "be", "been", "have", "has",
+    "had", "do", "does", "did", "will", "would", "could", "should",
+    "may", "might", "must", "can", "that", "which", "who", "whom",
+    "this", "these", "those", "it", "its", "they", "them", "their",
+    "we", "our", "you", "your", "he", "she", "his", "her", "my", "me",
+    "i", "s", "t",
+})
+
+
+def _content_words(expr: str) -> list[str]:
+    """Extract non-stopword alphabetic tokens from an expression."""
+    tokens = re.findall(r"[a-z]+", expr.lower())
+    filtered = [t for t in tokens if t not in _STOPWORDS and len(t) > 1]
+    return filtered if filtered else [expr.lower().strip()]
+
 
 def _cn_node(word: str) -> str:
     return f"/c/en/{word.lower().replace(' ', '_')}"
@@ -115,26 +133,37 @@ def _fetch_relatedness(
 
 
 def build_conceptnet_kernel(
-    words: list[str],
+    exprs: list[str],
     cache_path: Path = _DEFAULT_CACHE_PATH,
+    aggregation: str = "max",
 ) -> np.ndarray:
     """Build an NxN symmetric kernel from ConceptNet relatedness scores.
 
-    Entry (i, j) is the relatedness score between words[i] and words[j].
-    Missing or unknown pairs get score 0.0. The diagonal is 0.0.
-    Results are fetched from the ConceptNet REST API with a persistent
-    disk cache at *cache_path* to avoid redundant calls.
+    Each expression is tokenised into content words; K[i, j] is the
+    max (or mean) relatedness across all cross-word pairs between
+    exprs[i] and exprs[j].  This word-level aggregation ensures non-zero
+    scores even when full phrases are absent from ConceptNet.
+
+    Missing pairs get score 0.0.  The diagonal is 0.0.
     """
-    n = len(words)
+    n = len(exprs)
     K = np.zeros((n, n), dtype=float)
     cache = _load_cache(cache_path)
     new_call_count = [0]
 
+    content = [_content_words(e) for e in exprs]
+
     for i in range(n):
         for j in range(i + 1, n):
-            score = _fetch_relatedness(
-                words[i], words[j], cache, cache_path, new_call_count
-            )
+            scores = [
+                _fetch_relatedness(w1, w2, cache, cache_path, new_call_count)
+                for w1 in content[i]
+                for w2 in content[j]
+            ]
+            if aggregation == "mean":
+                score = float(np.mean(scores)) if scores else 0.0
+            else:
+                score = float(max(scores)) if scores else 0.0
             K[i, j] = score
             K[j, i] = score
 

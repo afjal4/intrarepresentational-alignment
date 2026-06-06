@@ -12,3 +12,6 @@ class EmbeddingModel(StrEnum):
 
     # FastText (Wikipedia news, with subword)
     FASTTEXT_WIKI_NEWS_300       = "fasttext-wiki-news-subwords-300"
+
+    # ConceptNet Numberbatch (commonsense knowledge graph embeddings)
+    CONCEPTNET_NUMBERBATCH_300   = "conceptnet-numberbatch-en-19.08"
