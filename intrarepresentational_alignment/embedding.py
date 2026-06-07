@@ -53,7 +53,9 @@ def _load_numberbatch(path: Path = _NUMBERBATCH_PATH) -> _NumberbatchWrapper:
         print(f"Downloading Numberbatch (~186 MB) to {path} ...")
         urllib.request.urlretrieve(_NUMBERBATCH_URL, path)
         print("Download complete.")
+    print(f"Loading Numberbatch from {path} ...")
     kv = KeyedVectors.load_word2vec_format(str(path), binary=False)
+    print("Numberbatch loaded.")
     return _NumberbatchWrapper(kv)
 
 

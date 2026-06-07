@@ -1,8 +1,8 @@
 #!/bin/bash
 #SBATCH --job-name=intra-align
 #SBATCH --cpus-per-task=8          # gensim/numpy parallelism
-#SBATCH --mem=32G                  # 5 embedding models + permutation matrices
-#SBATCH --time=04:00:00            # ~2-4 h for 5 models x 75 pairs x 500 perms
+#SBATCH --mem=48G                  # 6 embedding models including Numberbatch
+#SBATCH --time=08:00:00            # ~4-8 h for 6 models x 75 pairs x 500 perms
 #SBATCH --mail-type=ALL
 #SBATCH --mail-user=${USER}
 #SBATCH --output=/vol/bitbucket/%u/intra-align/logs/%j.out
@@ -31,7 +31,7 @@ echo "Node: $(hostname)  |  Python: $(python --version)"
 jupyter nbconvert \
     --to notebook \
     --execute \
-    --ExecutePreprocessor.timeout=14400 \
+    --ExecutePreprocessor.timeout=28800 \
     --ExecutePreprocessor.kernel_name=python3 \
     main.ipynb \
     --output main_executed.ipynb
