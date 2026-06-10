@@ -10,6 +10,8 @@ from gensim.models import KeyedVectors
 
 from .embedding_models import EmbeddingModel
 
+_SENTENCE_TRANSFORMER_MODELS = {EmbeddingModel.ALL_MINILM_L6_V2}
+
 _NUMBERBATCH_URL = (
     "https://conceptnet.s3.amazonaws.com/downloads/2019/numberbatch/"
     "numberbatch-en-19.08.txt.gz"
@@ -47,6 +49,19 @@ class _NumberbatchWrapper:
         return self._kv[key]
 
 
+class _SentenceTransformerWrapper:
+    """Wraps a SentenceTransformer model to encode full phrases."""
+
+    def __init__(self, model_name: str) -> None:
+        from sentence_transformers import SentenceTransformer
+        self._model = SentenceTransformer(model_name)
+        self.vector_size = self._model.get_sentence_embedding_dimension()
+
+    def encode(self, text: str) -> np.ndarray:
+        vec = self._model.encode(text, normalize_embeddings=True)
+        return np.array(vec, dtype=np.float32)
+
+
 def _load_numberbatch(path: Path = _NUMBERBATCH_PATH) -> _NumberbatchWrapper:
     if not path.exists():
         path.parent.mkdir(parents=True, exist_ok=True)
@@ -63,10 +78,14 @@ def _load_numberbatch(path: Path = _NUMBERBATCH_PATH) -> _NumberbatchWrapper:
 def _load_model(model_id: EmbeddingModel):
     if model_id == EmbeddingModel.CONCEPTNET_NUMBERBATCH_300:
         return _load_numberbatch()
+    if model_id in _SENTENCE_TRANSFORMER_MODELS:
+        return _SentenceTransformerWrapper(str(model_id))
     return api.load(str(model_id))
 
 
 def _embed_text(model, text: str) -> np.ndarray:
+    if isinstance(model, _SentenceTransformerWrapper):
+        return model.encode(text)
     tokens = text.lower().split()
     vecs = [model[t] for t in tokens if t in model]
     if not vecs:

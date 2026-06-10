@@ -15,3 +15,6 @@ class EmbeddingModel(StrEnum):
 
     # ConceptNet Numberbatch (commonsense knowledge graph embeddings)
     CONCEPTNET_NUMBERBATCH_300   = "conceptnet-numberbatch-en-19.08"
+
+    # Sentence Transformers
+    ALL_MINILM_L6_V2             = "all-MiniLM-L6-v2"
